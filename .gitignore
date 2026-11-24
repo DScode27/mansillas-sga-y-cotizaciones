@@ -1,0 +1,74 @@
+
+# =================================
+# VARIABLES DE ENTORNO Y SECRETOS
+# =================================
+.env
+.env.*
+!.env.example
+
+# =================================
+# PYTHON / FASTAPI
+# =================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# =================================
+# NODE / REACT / VITE
+# =================================
+node_modules/
+dist/
+.vite/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# =================================
+# EDITORES E IDE
+# =================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.code-workspace
+
+# =================================
+# SISTEMA OPERATIVO
+# =================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =================================
+# LOGS Y TEMPORALES
+# =================================
+*.log
+logs/
+tmp/
+temp/
+
+# =================================
+# BASE DE DATOS Y BACKUPS LOCALES
+# =================================
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.backup
+
+# =================================
+# ARCHIVOS DE CONFIGURACIÓN LOCAL
+# =================================
+.python-version.local
