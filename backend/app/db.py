@@ -5,11 +5,23 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
 
+
+def normalizar_database_url(url: str) -> str:
+    """Force the `psycopg` (v3) driver required by the design.
+
+    A bare `postgresql://` URL lets SQLAlchemy pick whichever PostgreSQL DBAPI
+    happens to be installed, so it is rewritten to `postgresql+psycopg://`.
+    """
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://") :]
+    return url
+
+
 if not settings.database_url:
     raise RuntimeError("DATABASE_URL must be set in backend/.env or the environment")
 
 engine = create_engine(
-    settings.database_url,
+    normalizar_database_url(settings.database_url),
     pool_pre_ping=True,
     connect_args={"options": f"-c search_path={settings.db_schema}"},
 )
