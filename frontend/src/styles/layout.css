@@ -1,0 +1,394 @@
+/* Estilos del layout base (header + sidebar + contenido).
+   Usa las variables de identidad definidas en theme.css. */
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--ancho-sidebar) 1fr;
+  grid-template-rows: var(--alto-header) 1fr;
+  grid-template-areas:
+    "sidebar header"
+    "sidebar main";
+  min-height: 100vh;
+}
+
+.app-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1.5rem;
+  background: var(--color-superficie);
+  border-bottom: 1px solid var(--color-borde);
+}
+
+.app-header__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-texto-suave);
+}
+
+.app-sidebar {
+  grid-area: sidebar;
+  background: var(--color-primario);
+  color: var(--color-sobre-primario);
+  padding: 1rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.app-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.app-sidebar__logo {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radio-sm);
+  object-fit: contain;
+  background: var(--color-sobre-primario);
+  padding: 2px;
+}
+
+.app-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.app-nav__link {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radio-sm);
+  color: var(--color-sobre-primario);
+  opacity: 0.85;
+}
+
+.app-nav__link:hover {
+  opacity: 1;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.app-nav__link.is-active {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.25);
+  font-weight: 600;
+}
+
+.app-main {
+  grid-area: main;
+  padding: 1.5rem;
+  overflow: auto;
+}
+
+.app-content {
+  max-width: var(--ancho-contenido);
+  margin: 0 auto;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: var(--radio-sm);
+  background: var(--color-primario);
+  color: var(--color-sobre-primario);
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--color-primario-hover);
+}
+
+.btn:active {
+  background: var(--color-primario-activo);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--color-texto);
+  border-color: var(--color-borde);
+}
+
+.btn--ghost:hover {
+  background: var(--color-fondo);
+}
+
+.card {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra-sm);
+  padding: 1.25rem;
+}
+
+/* Responsive: en móvil el sidebar se apila arriba. */
+@media (max-width: 768px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto var(--alto-header) 1fr;
+    grid-template-areas:
+      "sidebar"
+      "header"
+      "main";
+  }
+
+  .app-sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 0.75rem 1rem;
+  }
+
+  .app-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+/* Cabecera: bloque de usuario + cerrar sesión. */
+.app-header__user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-header__user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+}
+
+.app-header__user-name {
+  font-weight: 600;
+  color: var(--color-texto);
+}
+
+.app-header__user-role {
+  font-size: 0.75rem;
+  color: var(--color-texto-suave);
+}
+
+/* Pantalla de login (fuera del layout con sidebar). */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--color-fondo);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+}
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+}
+
+/* El logo siempre sobre fondo blanco (HU-27). */
+.login-brand__logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  background: var(--color-sobre-primario);
+  border-radius: var(--radio);
+  padding: 4px;
+}
+
+.login-brand__title {
+  margin: 0.5rem 0 0;
+}
+
+.login-brand__subtitle {
+  margin: 0;
+  color: var(--color-texto-suave);
+  font-size: 0.9rem;
+}
+
+/* Formularios. */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-field__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-texto);
+}
+
+.form-field__input {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-sm);
+  background: var(--color-superficie);
+  color: var(--color-texto);
+  font: inherit;
+}
+
+.form-field__input:focus {
+  outline: none;
+  border-color: var(--color-primario);
+  box-shadow: 0 0 0 2px rgba(255, 145, 78, 0.25);
+}
+
+.form-field__input:disabled {
+  background: var(--color-fondo);
+  opacity: 0.7;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--color-error);
+  font-size: 0.9rem;
+}
+
+.form-notice {
+  margin: 0 0 0.25rem;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--color-aviso);
+  background: #fff4ec; /* naranja de marca muy diluido, sobre fondo blanco */
+  color: var(--color-texto);
+  font-size: 0.9rem;
+  border-radius: 4px;
+}
+
+.login-form__submit {
+  justify-content: center;
+  width: 100%;
+  padding: 0.6rem;
+}
+
+.btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Páginas con varias tarjetas apiladas (p. ej. gestión de usuarios). */
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Formulario de alta en rejilla responsive. */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.form-actions {
+  grid-column: 1 / -1;
+}
+
+/* Mensajes que ocupan todo el ancho de la rejilla del formulario. */
+.form-grid .form-error,
+.form-grid .form-success {
+  grid-column: 1 / -1;
+}
+
+.form-success {
+  margin: 0;
+  color: var(--color-exito);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Estados de carga / vacío / error de los listados. */
+.state-text {
+  margin: 0.5rem 0 0;
+  color: var(--color-texto-suave);
+}
+
+.state-error {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.state-error p {
+  margin: 0;
+  color: var(--color-error);
+}
+
+/* Tabla de datos con scroll horizontal en móvil. */
+.table-wrap {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--color-borde);
+}
+
+.data-table th {
+  color: var(--color-texto-suave);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.data-table tbody tr:hover {
+  background: var(--color-fondo);
+}
+
+/* Insignias de estado. */
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge--ok {
+  background: rgba(46, 125, 50, 0.12);
+  color: var(--color-exito);
+}
+
+.badge--off {
+  background: rgba(127, 127, 129, 0.15);
+  color: var(--color-texto-suave);
+}
