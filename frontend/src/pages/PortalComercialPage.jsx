@@ -12,13 +12,14 @@
  * Estados de carga, error y vacío en cada listado. Responsive de una columna
  * que escala a escritorio, igual que el resto del portal.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { listEmpresas } from '../api/empresas'
 import { listVisitas } from '../api/visitas'
 import { listSillas, COMPONENTES } from '../api/sillas'
 import {
   listPrecotizaciones,
   createPrecotizacion,
+  listAccesos,
 } from '../api/precotizaciones'
 import { useAuth } from '../context/auth-context'
 
@@ -58,6 +59,13 @@ export default function PortalComercialPage() {
   const [creando, setCreando] = useState(false)
   const [errorCrear, setErrorCrear] = useState('')
   const [exito, setExito] = useState('')
+
+  // Accesos del enlace público por precotización: id abierta, lista cargada,
+  // carga en curso y error. Se consultan bajo demanda (GET .../accesos).
+  const [accesosAbiertos, setAccesosAbiertos] = useState(null)
+  const [accesos, setAccesos] = useState([])
+  const [cargandoAccesos, setCargandoAccesos] = useState(false)
+  const [errorAccesos, setErrorAccesos] = useState('')
 
   const idEmpresaSel = empresaSel ? Number(empresaSel) : null
   const idVisitaSel = visitaSel ? Number(visitaSel) : null
@@ -206,6 +214,26 @@ export default function PortalComercialPage() {
       }
     } finally {
       setCreando(false)
+    }
+  }
+
+  // Abre o cierra el detalle de accesos de una precotización. Al abrir, consulta
+  // GET /precotizaciones/{id}/accesos; una lista vacía significa "sin accesos".
+  async function toggleAccesos(idPrecotizacion) {
+    if (accesosAbiertos === idPrecotizacion) {
+      setAccesosAbiertos(null)
+      return
+    }
+    setAccesosAbiertos(idPrecotizacion)
+    setAccesos([])
+    setErrorAccesos('')
+    setCargandoAccesos(true)
+    try {
+      setAccesos(await listAccesos(idPrecotizacion))
+    } catch {
+      setErrorAccesos('No se pudieron cargar los accesos.')
+    } finally {
+      setCargandoAccesos(false)
     }
   }
 
@@ -408,23 +436,73 @@ export default function PortalComercialPage() {
                     <th>Estado</th>
                     <th>Creada</th>
                     <th>Observaciones</th>
+                    <th>Accesos</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {precotizaciones.map((p) => (
-                    <tr key={p.id_precotizacion}>
-                      <td>{p.id_precotizacion}</td>
-                      <td>
-                        <span className="badge badge--off">{p.estado}</span>
-                      </td>
-                      <td>
-                        {p.fecha_creacion
-                          ? new Date(p.fecha_creacion).toLocaleString()
-                          : '—'}
-                      </td>
-                      <td>{p.observaciones ?? '—'}</td>
-                    </tr>
-                  ))}
+                  {precotizaciones.map((p) => {
+                    const abierta = accesosAbiertos === p.id_precotizacion
+                    return (
+                      <Fragment key={p.id_precotizacion}>
+                        <tr>
+                          <td>{p.id_precotizacion}</td>
+                          <td>
+                            <span className="badge badge--off">{p.estado}</span>
+                          </td>
+                          <td>
+                            {p.fecha_creacion
+                              ? new Date(p.fecha_creacion).toLocaleString()
+                              : '—'}
+                          </td>
+                          <td>{p.observaciones ?? '—'}</td>
+                          <td>
+                            <button
+                              className="btn btn--ghost"
+                              type="button"
+                              onClick={() => toggleAccesos(p.id_precotizacion)}
+                              aria-expanded={abierta}
+                            >
+                              {abierta ? 'Ocultar' : 'Ver accesos'}
+                            </button>
+                          </td>
+                        </tr>
+                        {abierta && (
+                          <tr className="data-table__detalle">
+                            <td colSpan={5}>
+                              {cargandoAccesos && (
+                                <p className="state-text">Cargando accesos…</p>
+                              )}
+                              {!cargandoAccesos && errorAccesos && (
+                                <p className="form-error" role="alert">
+                                  {errorAccesos}
+                                </p>
+                              )}
+                              {!cargandoAccesos && !errorAccesos && accesos.length === 0 && (
+                                <p className="state-text">
+                                  Sin accesos registrados al enlace público.
+                                </p>
+                              )}
+                              {!cargandoAccesos && !errorAccesos && accesos.length > 0 && (
+                                <ul className="accesos-lista">
+                                  {accesos.map((a) => (
+                                    <li key={a.id_acceso}>
+                                      {a.fecha_acceso
+                                        ? new Date(a.fecha_acceso).toLocaleString()
+                                        : '—'}
+                                      {' · '}
+                                      {a.navegador ?? 'Navegador desconocido'}
+                                      {' · '}
+                                      {a.sistema_operativo ?? 'SO desconocido'}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

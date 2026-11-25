@@ -65,8 +65,21 @@ export async function getSillaPublica(token) {
   }
 
   try {
-    const { data } = await publicClient.get(`/public/sillas/${token}`)
-    return data
+    // Ruta real del backend de sillas: GET /sillas/token/{token}. Devuelve el
+    // contrato `SillaCreadaOut` (ids, cargo, codigo_qr, token_publico). Todavía
+    // no incluye el nombre de empresa/sede ni el estado de los componentes que
+    // esta ficha muestra; mientras el backend no los agregue, la pantalla los
+    // resuelve con sus valores por defecto (`?? '—'`) y no los renderiza.
+    const { data } = await publicClient.get(`/sillas/token/${token}`)
+    return {
+      codigo_qr: data.codigo_qr,
+      estado: data.estado ?? null,
+      empresa: data.empresa ?? null,
+      sede: data.sede ?? null,
+      serial_antiguo: data.serial_antiguo ?? null,
+      cargo: data.cargo ?? null,
+      componentes: data.componentes ?? [],
+    }
   } catch (err) {
     if (err.response?.status === 404) {
       throw new TokenNoEncontrado()

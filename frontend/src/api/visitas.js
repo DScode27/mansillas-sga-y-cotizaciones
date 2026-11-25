@@ -75,3 +75,62 @@ export async function createVisita({
   const { data } = await apiClient.post('/visitas', payload)
   return data
 }
+
+// Busca una visita en el store del mock; lanza un 404 imitado si no existe, para
+// que la pantalla ejercite esa rama igual que contra el backend real.
+function buscarVisitaMock(idVisita) {
+  const visita = visitasMock.find((v) => v.id_visita === Number(idVisita))
+  if (!visita) {
+    throw { response: { status: 404 } }
+  }
+  return visita
+}
+
+/* Trae una visita por su id (GET /visitas/{id_visita}). */
+export async function getVisita(idVisita) {
+  if (USE_MOCK.visitas) {
+    return { ...buscarVisitaMock(idVisita) }
+  }
+  const { data } = await apiClient.get(`/visitas/${idVisita}`)
+  return data
+}
+
+/* Actualiza una visita (PUT /visitas/{id_visita}).
+ *
+ * Solo se envían los campos presentes en `cambios`. El backend ignora
+ * `cantidad_estimada` (RN-04 conserva la estimación original), así que no se
+ * incluye aquí. Campos editables: id_sede, id_tecnico, fecha_programada, estado,
+ * observaciones. */
+export async function updateVisita(idVisita, cambios) {
+  const payload = {}
+  if ('id_sede' in cambios) payload.id_sede = Number(cambios.id_sede)
+  if ('id_tecnico' in cambios) payload.id_tecnico = Number(cambios.id_tecnico)
+  if ('fecha_programada' in cambios) {
+    payload.fecha_programada = cambios.fecha_programada || null
+  }
+  if ('estado' in cambios) payload.estado = cambios.estado
+  if ('observaciones' in cambios) {
+    payload.observaciones = cambios.observaciones?.trim() || null
+  }
+
+  if (USE_MOCK.visitas) {
+    const visita = buscarVisitaMock(idVisita)
+    Object.assign(visita, payload)
+    return { ...visita }
+  }
+  const { data } = await apiClient.put(`/visitas/${idVisita}`, payload)
+  return data
+}
+
+/* Elimina una visita (DELETE /visitas/{id_visita}).
+ *
+ * El backend responde 409 si la visita tiene sillas registradas; en mock se
+ * imita ese conflicto para que la pantalla cubra esa rama. */
+export async function deleteVisita(idVisita) {
+  if (USE_MOCK.visitas) {
+    const visita = buscarVisitaMock(idVisita)
+    visitasMock.splice(visitasMock.indexOf(visita), 1)
+    return
+  }
+  await apiClient.delete(`/visitas/${idVisita}`)
+}

@@ -16,5 +16,6 @@ export const USE_MOCK = {
   sillas: true,
   precotizaciones: true,
   qrPublico: true,
+  qrPdf: true,
   portalCliente: true,
 }

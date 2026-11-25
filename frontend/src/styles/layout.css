@@ -374,6 +374,24 @@
   background: var(--color-fondo);
 }
 
+/* Fila expandible de detalle dentro de una tabla (p. ej. accesos de una
+   precotización). No resalta al pasar el cursor, para distinguirla de las
+   filas de datos. */
+.data-table__detalle:hover {
+  background: transparent;
+}
+
+/* Lista de accesos al enlace público de una precotización. */
+.accesos-lista {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.88rem;
+  color: var(--color-texto-suave);
+}
+
 /* Insignias de estado. */
 .badge {
   display: inline-block;

@@ -76,50 +76,108 @@ export async function createSilla({
   observaciones,
   componentes,
 }) {
+  // Contrato del backend real (POST /visitas/{id_visita}/sillas): solo acepta
+  // estos cuatro campos. La empresa, sede y departamento los deduce el servidor
+  // del empleado; el codigo_qr/token_publico los genera la BD. El estado de los
+  // componentes y las fotos aún no tienen endpoint (son de otro dev), así que
+  // `componentes` solo alimenta el store del mock; cuando exista ese endpoint se
+  // enviará aparte sin tocar esta pantalla.
   const payload = {
-    id_empresa: Number(id_empresa),
-    id_visita: Number(id_visita),
-    id_sede: Number(id_sede),
-    id_departamento: Number(id_departamento),
     id_empleado: Number(id_empleado),
     cargo: cargo.trim(),
     serial_antiguo: serial_antiguo?.trim() || null,
     observaciones: observaciones?.trim() || null,
-    // El código QR lo genera la BD: se envía '' para que el trigger lo asigne.
-    codigo_qr: '',
-    componentes: componentes.map((c) => ({
-      id_componente: c.id_componente,
-      estado: c.estado,
-      observacion: c.observacion?.trim() || null,
-    })),
   }
 
   if (USE_MOCK.sillas) {
     const numero = proximoQrMock++
     const silla = {
       id_silla: proximoIdMock++,
+      id_empresa: Number(id_empresa),
+      id_visita: Number(id_visita),
+      id_sede: Number(id_sede),
+      id_departamento: Number(id_departamento),
       numero_qr: numero,
       codigo_qr: `SIC-${String(numero).padStart(8, '0')}`,
       token_publico: `mock-token-${numero}`,
       estado: 'REGISTRADA',
       fecha_registro: new Date().toISOString(),
       fotos: [],
+      componentes: componentes.map((c) => ({
+        id_componente: c.id_componente,
+        estado: c.estado,
+        observacion: c.observacion?.trim() || null,
+      })),
       ...payload,
     }
     sillasMock.push(silla)
     return conDerivados(silla)
   }
 
-  const { data } = await apiClient.post('/sillas', payload)
+  const { data } = await apiClient.post(`/visitas/${Number(id_visita)}/sillas`, payload)
+  return data
+}
+
+/* Trae una silla por su id (GET /sillas/{id_silla}). */
+export async function getSilla(idSilla) {
+  if (USE_MOCK.sillas) {
+    const silla = sillasMock.find((s) => s.id_silla === Number(idSilla))
+    if (!silla) {
+      throw { response: { status: 404 } }
+    }
+    return conDerivados(silla)
+  }
+  const { data } = await apiClient.get(`/sillas/${idSilla}`)
+  return data
+}
+
+/* Actualiza los datos editables de una silla (PUT /sillas/{id_silla}).
+ *
+ * El backend solo deja cambiar `serial_antiguo` y `observaciones`; responde 409
+ * si el serial queda duplicado en la empresa, conflicto que el mock imita. */
+export async function updateSilla(idSilla, cambios) {
+  const payload = {}
+  if ('serial_antiguo' in cambios) {
+    payload.serial_antiguo = cambios.serial_antiguo?.trim() || null
+  }
+  if ('observaciones' in cambios) {
+    payload.observaciones = cambios.observaciones?.trim() || null
+  }
+
+  if (USE_MOCK.sillas) {
+    const silla = sillasMock.find((s) => s.id_silla === Number(idSilla))
+    if (!silla) {
+      throw { response: { status: 404 } }
+    }
+    if (
+      payload.serial_antiguo &&
+      sillasMock.some(
+        (s) =>
+          s.id_silla !== silla.id_silla &&
+          s.id_empresa === silla.id_empresa &&
+          s.serial_antiguo === payload.serial_antiguo,
+      )
+    ) {
+      throw { response: { status: 409 } }
+    }
+    Object.assign(silla, payload)
+    return conDerivados(silla)
+  }
+  const { data } = await apiClient.put(`/sillas/${idSilla}`, payload)
   return data
 }
 
 /* Subida de fotos de una silla (R8).
  *
- * El backend real guarda el archivo en almacenamiento y registra la ruta en
- * `fotografia`. En mock generamos una URL local temporal (`URL.createObjectURL`)
- * para previsualizar sin backend; quien la use debe revocarla al desmontar.
- */
+ * El backend de sillas (de otro dev) todavía NO expone un endpoint de fotos:
+ * registrar_silla solo persiste los datos básicos. Mientras no exista, esto
+ * funciona solo en modo mock, generando una URL local temporal
+ * (`URL.createObjectURL`) para previsualizar; quien la use debe revocarla al
+ * desmontar. Cuando el endpoint real llegue, se ajusta aquí la ruta/forma
+ * acordada (p. ej. POST /sillas/{id_silla}/fotos con multipart) sin tocar la
+ * pantalla. */
+const FOTOS_ENDPOINT = (idSilla) => `/sillas/${idSilla}/fotos`
+
 export async function uploadFotoSilla({ id_silla, archivo }) {
   if (USE_MOCK.sillas) {
     const silla = sillasMock.find((s) => s.id_silla === Number(id_silla))
@@ -135,7 +193,7 @@ export async function uploadFotoSilla({ id_silla, archivo }) {
 
   const formData = new FormData()
   formData.append('archivo', archivo)
-  const { data } = await apiClient.post(`/sillas/${id_silla}/fotos`, formData, {
+  const { data } = await apiClient.post(FOTOS_ENDPOINT(id_silla), formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
   return data

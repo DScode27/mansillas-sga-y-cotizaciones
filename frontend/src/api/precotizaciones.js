@@ -66,3 +66,21 @@ export async function createPrecotizacion({
   const { data } = await apiClient.post('/precotizaciones', payload)
   return data
 }
+
+/* Lista los accesos registrados al enlace público de una precotización
+ * (GET /precotizaciones/{id_precotizacion}/accesos).
+ *
+ * El backend devuelve la lista de accesos (fecha, navegador, sistema operativo)
+ * o, cuando no hay ninguno, un objeto `{ mensaje: 'Sin accesos registrados' }`.
+ * Aquí se normaliza siempre a un arreglo para que la pantalla no distinga los
+ * dos formatos: lista vacía == sin accesos. Solo el comercial lo consulta, así
+ * que va autenticado por `apiClient`. */
+export async function listAccesos(idPrecotizacion) {
+  if (USE_MOCK.precotizaciones) {
+    return []
+  }
+  const { data } = await apiClient.get(
+    `/precotizaciones/${idPrecotizacion}/accesos`,
+  )
+  return Array.isArray(data) ? data : []
+}

@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listEmpresas } from '../api/empresas'
 import { listUsuarios } from '../api/usuarios'
-import { listVisitas, createVisita } from '../api/visitas'
+import { listVisitas, createVisita, updateVisita, deleteVisita } from '../api/visitas'
 import { ROLES } from '../auth/roles'
 import { useAuth } from '../context/auth-context'
 
@@ -27,6 +27,9 @@ const ESTADO_LABEL = {
   FINALIZADA: 'Finalizada',
   CANCELADA: 'Cancelada',
 }
+
+// Estados que el comercial puede asignar desde el listado (PUT /visitas/{id}).
+const ESTADOS_VISITA = ['PROGRAMADA', 'EN_CURSO', 'FINALIZADA', 'CANCELADA']
 
 function formInicial() {
   return {
@@ -58,6 +61,11 @@ export default function VisitasPage() {
   const [enviando, setEnviando] = useState(false)
   const [errorForm, setErrorForm] = useState('')
   const [exito, setExito] = useState('')
+
+  // id_visita cuya acción (cambio de estado o borrado) está en curso, para
+  // deshabilitar sus controles. Y mensajes de resultado del listado.
+  const [accionEnCurso, setAccionEnCurso] = useState(null)
+  const [errorAccion, setErrorAccion] = useState('')
 
   // Empresas para el selector (mock conmutable).
   useEffect(() => {
@@ -175,6 +183,57 @@ export default function VisitasPage() {
       }
     } finally {
       setEnviando(false)
+    }
+  }
+
+  // Cambia el estado de una visita (PUT /visitas/{id}). Actualiza la fila en
+  // sitio para no recargar todo el listado.
+  async function handleCambiarEstado(idVisita, estado) {
+    setErrorAccion('')
+    setAccionEnCurso(idVisita)
+    try {
+      const actualizada = await updateVisita(idVisita, { estado })
+      setVisitas((prev) =>
+        prev.map((v) => (v.id_visita === idVisita ? { ...v, ...actualizada } : v)),
+      )
+    } catch (err) {
+      const status = err.response?.status
+      if (status === 403) {
+        setErrorAccion('No tienes permiso para modificar visitas.')
+      } else if (status === 404) {
+        setErrorAccion('La visita ya no existe; recarga el listado.')
+      } else {
+        setErrorAccion('No se pudo actualizar la visita. Inténtalo de nuevo.')
+      }
+    } finally {
+      setAccionEnCurso(null)
+    }
+  }
+
+  // Elimina una visita (DELETE /visitas/{id}). El backend responde 409 si la
+  // visita tiene sillas registradas; se avisa sin borrarla.
+  async function handleEliminar(idVisita) {
+    setErrorAccion('')
+    if (!window.confirm(`¿Eliminar la visita #${idVisita}? Esta acción no se puede deshacer.`)) {
+      return
+    }
+    setAccionEnCurso(idVisita)
+    try {
+      await deleteVisita(idVisita)
+      setVisitas((prev) => prev.filter((v) => v.id_visita !== idVisita))
+    } catch (err) {
+      const status = err.response?.status
+      if (status === 409) {
+        setErrorAccion('No se puede eliminar: la visita tiene sillas registradas.')
+      } else if (status === 403) {
+        setErrorAccion('No tienes permiso para eliminar visitas.')
+      } else if (status === 404) {
+        setErrorAccion('La visita ya no existe; recarga el listado.')
+      } else {
+        setErrorAccion('No se pudo eliminar la visita. Inténtalo de nuevo.')
+      }
+    } finally {
+      setAccionEnCurso(null)
     }
   }
 
@@ -350,36 +409,79 @@ export default function VisitasPage() {
           )}
 
           {!cargandoVisitas && !errorVisitas && visitas.length > 0 && (
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Sede</th>
-                    <th>Técnico</th>
-                    <th>Fecha programada</th>
-                    <th>Cant. estimada</th>
-                    <th>Estado</th>
-                    <th>Observaciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visitas.map((v) => (
-                    <tr key={v.id_visita}>
-                      <td>{v.id_sede}</td>
-                      <td>{tecnicosPorId.get(v.id_tecnico) ?? v.id_tecnico}</td>
-                      <td>
-                        {v.fecha_programada
-                          ? new Date(v.fecha_programada).toLocaleString()
-                          : '—'}
-                      </td>
-                      <td>{v.cantidad_estimada}</td>
-                      <td>{ESTADO_LABEL[v.estado] ?? v.estado}</td>
-                      <td>{v.observaciones ?? '—'}</td>
+            <>
+              {errorAccion && (
+                <p className="form-error" role="alert">
+                  {errorAccion}
+                </p>
+              )}
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Sede</th>
+                      <th>Técnico</th>
+                      <th>Fecha programada</th>
+                      <th>Cant. estimada</th>
+                      <th>Estado</th>
+                      <th>Observaciones</th>
+                      {puedeCrear && <th>Acciones</th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {visitas.map((v) => {
+                      const ocupada = accionEnCurso === v.id_visita
+                      return (
+                        <tr key={v.id_visita}>
+                          <td>{v.id_sede}</td>
+                          <td>{tecnicosPorId.get(v.id_tecnico) ?? v.id_tecnico}</td>
+                          <td>
+                            {v.fecha_programada
+                              ? new Date(v.fecha_programada).toLocaleString()
+                              : '—'}
+                          </td>
+                          <td>{v.cantidad_estimada}</td>
+                          <td>
+                            {puedeCrear ? (
+                              <select
+                                className="form-field__input"
+                                aria-label={`Estado de la visita ${v.id_visita}`}
+                                value={v.estado}
+                                onChange={(e) =>
+                                  handleCambiarEstado(v.id_visita, e.target.value)
+                                }
+                                disabled={ocupada}
+                              >
+                                {ESTADOS_VISITA.map((estado) => (
+                                  <option key={estado} value={estado}>
+                                    {ESTADO_LABEL[estado]}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              (ESTADO_LABEL[v.estado] ?? v.estado)
+                            )}
+                          </td>
+                          <td>{v.observaciones ?? '—'}</td>
+                          {puedeCrear && (
+                            <td>
+                              <button
+                                className="btn btn--ghost"
+                                type="button"
+                                onClick={() => handleEliminar(v.id_visita)}
+                                disabled={ocupada}
+                              >
+                                {ocupada ? '…' : 'Eliminar'}
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </section>
       )}
