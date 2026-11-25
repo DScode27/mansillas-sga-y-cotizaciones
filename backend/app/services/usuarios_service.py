@@ -12,7 +12,7 @@ El RBAC (solo `COMERCIAL_MANSILLAS` entra) se impone en la capa de dependencias
 from __future__ import annotations
 
 from sqlalchemy import text
-from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Session
 
 from ..security import hash_password
 
@@ -58,7 +58,7 @@ def _normalize_empresa(rol: str, id_empresa: int | None) -> int | None:
     return None
 
 
-def listar_usuarios(db: Connection) -> list[dict]:
+def listar_usuarios(db: Session) -> list[dict]:
     """Lista todos los usuarios (datos públicos, sin password_hash).
 
     Para `COMERCIAL_MANSILLAS` (interno), que administra todas las empresas; por
@@ -77,7 +77,7 @@ def listar_usuarios(db: Connection) -> list[dict]:
 
 
 def crear_usuario(
-    db: Connection,
+    db: Session,
     *,
     nombre: str,
     correo: str,
@@ -115,12 +115,15 @@ def crear_usuario(
             "rol": rol,
         },
     ).mappings().first()
+    # `get_db` entrega una Session ORM que revierte al cerrar la petición:
+    # el alta debe confirmarse explícitamente.
+    db.commit()
 
     return dict(row)
 
 
 def asignar_rol(
-    db: Connection,
+    db: Session,
     *,
     id_usuario: int,
     rol: str,
@@ -149,4 +152,5 @@ def asignar_rol(
     if row is None:
         raise UsuarioNoEncontrado
 
+    db.commit()
     return dict(row)

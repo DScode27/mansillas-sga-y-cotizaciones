@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import get_current_user
@@ -23,7 +23,7 @@ _bearer = HTTPBearer(auto_error=False)
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(payload: LoginRequest, db: Connection = Depends(get_db)) -> LoginResponse:
+def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
     try:
         result = auth_service.authenticate(db, payload.correo, payload.password)
     except auth_service.InvalidCredentials:
@@ -55,7 +55,7 @@ def me(user: UsuarioPublico = Depends(get_current_user)) -> UsuarioPublico:
 def logout(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     _user: UsuarioPublico = Depends(get_current_user),
-    db: Connection = Depends(get_db),
+    db: Session = Depends(get_db),
 ) -> LogoutResponse:
     """Revoca la sesión actual (marca `fecha_cierre`).
 

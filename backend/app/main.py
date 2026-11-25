@@ -1,8 +1,8 @@
-"""Aplicación FastAPI de MansillasSIC (parte de seguridad de Nicolás).
+"""Aplicación FastAPI de MansillasSIC.
 
-Monta CORS para el frontend Vite y registra los routers de seguridad:
-autenticación (HU-21/25) y gestión de usuarios (HU-20). Las siguientes HU añaden
-sus propios routers.
+Monta CORS para el frontend Vite y registra todos los routers del backend:
+seguridad (auth HU-21/25, usuarios HU-20) y los recursos de negocio (visitas,
+sillas, QR, accesos).
 """
 
 from __future__ import annotations
@@ -10,12 +10,15 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import get_settings
-from .routers import auth, usuarios
+from app.config import settings
+from app.routers import accesos, auth, qr, sillas, usuarios, visitas
 
-settings = get_settings()
-
-app = FastAPI(title=settings.app_name, debug=settings.debug)
+app = FastAPI(
+    title=settings.app_name,
+    version="0.1.0",
+    description="API for the Mansillas SGA and quotes system.",
+    debug=settings.debug,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,9 +30,17 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(usuarios.router)
+app.include_router(visitas.router)
+app.include_router(sillas.router)
+app.include_router(qr.router)
+app.include_router(accesos.router)
 
 
-@app.get("/health", tags=["health"])
-def health() -> dict[str, str]:
-    """Sonda simple para verificar que la app responde."""
+@app.get("/")
+def read_root() -> dict[str, str]:
+    return {"status": "ok", "service": settings.app_name}
+
+
+@app.get("/health")
+def health_check() -> dict[str, str]:
     return {"status": "ok"}

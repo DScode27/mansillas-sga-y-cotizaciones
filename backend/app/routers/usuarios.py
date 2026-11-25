@@ -9,7 +9,7 @@ gestiona usuarios; cualquier otro recibe 403 (y 401 si no hay sesión). La lógi
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import require_roles
@@ -25,13 +25,13 @@ router = APIRouter(
 
 
 @router.get("", response_model=list[UsuarioDetalle])
-def listar(db: Connection = Depends(get_db)) -> list[UsuarioDetalle]:
+def listar(db: Session = Depends(get_db)) -> list[UsuarioDetalle]:
     """Lista los usuarios del sistema."""
     return [UsuarioDetalle(**u) for u in usuarios_service.listar_usuarios(db)]
 
 
 @router.post("", response_model=UsuarioDetalle, status_code=status.HTTP_201_CREATED)
-def crear(payload: UsuarioCreate, db: Connection = Depends(get_db)) -> UsuarioDetalle:
+def crear(payload: UsuarioCreate, db: Session = Depends(get_db)) -> UsuarioDetalle:
     """Crea un usuario con la contraseña hasheada (HU-20, R5)."""
     try:
         usuario = usuarios_service.crear_usuario(
@@ -57,7 +57,7 @@ def crear(payload: UsuarioCreate, db: Connection = Depends(get_db)) -> UsuarioDe
 def asignar_rol(
     id_usuario: int,
     payload: RolUpdate,
-    db: Connection = Depends(get_db),
+    db: Session = Depends(get_db),
 ) -> UsuarioDetalle:
     """Asigna un rol (y su empresa, si aplica) a un usuario existente."""
     try:

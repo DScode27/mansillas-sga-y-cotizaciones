@@ -1,47 +1,70 @@
-"""Conexión a la base de datos con SQLAlchemy Core.
+"""Database access with SQLAlchemy over the existing `mansillas` schema.
 
-Usamos Core (text() + engine) en vez del ORM: el esquema ya existe en la BD
-(backend/database/SQLMansillasSIC.sql) y para un MVP consultas directas son más
-simples que mapear todas las tablas.
+The engine keeps two safety nets so queries always see the application schema,
+even behind Supabase's pgbouncer in transaction mode (where startup `options`
+are ignored):
+  * `connect_args` sets `search_path` when the connection is created.
+  * a `begin` listener runs `SET LOCAL search_path` inside every transaction.
 """
 
 from collections.abc import Iterator
 
 from sqlalchemy import create_engine, event
-from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from .config import get_settings
+from app.config import get_settings, normalizar_database_url
+
+__all__ = [
+    "Base",
+    "SessionLocal",
+    "engine",
+    "get_db",
+    "get_engine",
+    "normalizar_database_url",
+]
 
 _engine: Engine | None = None
 
-# Esquema de la aplicación (ver SQLMansillasSIC.sql).
-_SEARCH_PATH = "mansillas, public"
-
 
 def get_engine() -> Engine:
+    """Build (once) the engine for the configured database."""
     global _engine
     if _engine is None:
-        settings = get_settings()
+        actual = get_settings()
+        if not actual.database_url:
+            raise RuntimeError(
+                "DATABASE_URL must be set in backend/.env or the environment"
+            )
+
+        # libpq splits `options` on spaces, so the list must not contain any.
+        search_path_option = f"{actual.db_schema},public"
+        search_path_sql = f"{actual.db_schema}, public"
         _engine = create_engine(
-            settings.sqlalchemy_url,
+            actual.sqlalchemy_url,
             pool_pre_ping=True,
-            # search_path por parámetro de arranque (funciona en conexión directa).
-            connect_args={"options": f"-csearch_path={_SEARCH_PATH}"},
+            connect_args={"options": f"-csearch_path={search_path_option}"},
         )
 
-        # Supabase suele usarse vía pgbouncer en modo transacción, que ignora el
-        # `options` de arranque y reutiliza conexiones entre clientes. Fijamos el
-        # search_path dentro de cada transacción con SET LOCAL para no depender de
-        # ello ni calificar el esquema en cada consulta.
         @event.listens_for(_engine, "begin")
-        def _set_search_path(conn):  # pragma: no cover - efecto de conexión
-            conn.exec_driver_sql(f"SET LOCAL search_path TO {_SEARCH_PATH}")
+        def _set_search_path(conn) -> None:  # pragma: no cover - connection effect
+            conn.exec_driver_sql(f"SET LOCAL search_path TO {search_path_sql}")
 
     return _engine
 
 
-def get_db() -> Iterator[Connection]:
-    """Dependencia de FastAPI: entrega una conexión transaccional por request."""
-    engine = get_engine()
-    with engine.begin() as conn:
-        yield conn
+engine = get_engine()
+SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+class Base(DeclarativeBase):
+    """Declarative base shared by every model mapped over the `mansillas` schema."""
+
+
+def get_db() -> Iterator[Session]:
+    """FastAPI dependency yielding one SQLAlchemy session per request."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

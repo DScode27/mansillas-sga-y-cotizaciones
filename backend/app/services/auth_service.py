@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text
-from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..security import (
@@ -39,7 +39,7 @@ class InvalidSession(Exception):
     """
 
 
-def authenticate(db: Connection, correo: str, password: str) -> dict:
+def authenticate(db: Session, correo: str, password: str) -> dict:
     """Valida credenciales, crea la sesión y devuelve usuario + token.
 
     Returns un dict con: access_token, id_usuario, nombre, correo, rol, id_empresa.
@@ -78,6 +78,10 @@ def authenticate(db: Connection, correo: str, password: str) -> dict:
 
     _create_session(db, row["id_usuario"], token, now, expires_at)
 
+    # The session row must survive the request: `get_db` yields an ORM Session
+    # that is closed (and rolled back) when the request ends.
+    db.commit()
+
     return {
         "access_token": token,
         "id_usuario": row["id_usuario"],
@@ -88,7 +92,7 @@ def authenticate(db: Connection, correo: str, password: str) -> dict:
     }
 
 
-def resolve_session(db: Connection, token: str) -> dict:
+def resolve_session(db: Session, token: str) -> dict:
     """Valida el token y la sesión asociada; refresca `ultima_actividad`.
 
     Comprobaciones (en orden): firma/expiración del JWT, que exista una sesión
@@ -156,6 +160,9 @@ def resolve_session(db: Connection, token: str) -> dict:
         ),
         {"now": now, "id_sesion": row["id_sesion"]},
     )
+    # `get_db` entrega una Session ORM que hace rollback al cerrar la petición:
+    # el refresco de actividad debe confirmarse explícitamente.
+    db.commit()
 
     return {
         "id_usuario": row["id_usuario"],
@@ -166,7 +173,7 @@ def resolve_session(db: Connection, token: str) -> dict:
     }
 
 
-def logout(db: Connection, token: str) -> None:
+def logout(db: Session, token: str) -> None:
     """Revoca la sesión del token marcando `fecha_cierre` (idempotente).
 
     No lanza si el token no corresponde a ninguna sesión abierta: el efecto
@@ -184,6 +191,7 @@ def logout(db: Connection, token: str) -> None:
         ),
         {"now": datetime.now(timezone.utc), "token_hash": hash_token(token)},
     )
+    db.commit()
 
 
 def _as_utc(value: datetime | str) -> datetime:
@@ -206,7 +214,7 @@ def _is_past(value: datetime | str, now: datetime) -> bool:
 
 
 def _create_session(
-    db: Connection,
+    db: Session,
     id_usuario: int,
     token: str,
     now: datetime,

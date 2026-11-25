@@ -18,7 +18,7 @@ from collections.abc import Callable
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Session
 
 from .db import get_db
 from .schemas import UsuarioPublico
@@ -41,7 +41,7 @@ _UNAUTHORIZED = HTTPException(
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    db: Connection = Depends(get_db),
+    db: Session = Depends(get_db),
 ) -> UsuarioPublico:
     """Usuario autenticado de la petición. Responde 401 si la sesión no vale."""
     if credentials is None or not credentials.credentials:
