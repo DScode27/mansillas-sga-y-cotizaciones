@@ -1,5 +1,15 @@
 """Dependencias transversales de FastAPI para autenticación y autorización.
 
+DEUDA TÉCNICA (unificar con el compañero): existe un segundo módulo de RBAC,
+`app/deps.py`, que resuelve la sesión y los roles de forma independiente para los
+routers de negocio (visitas, sillas, qr, accesos). Este módulo (`dependencies.py`)
+lo usan los routers de seguridad (auth, usuarios). Ambos validan lo mismo (JWT,
+sesión abierta, expiración, inactividad) pero con contratos distintos
+(`UsuarioPublico` Pydantic aquí vs. `CurrentUser` dataclass en `deps.py`) y con
+diferencias de comportamiento (p. ej. `deps.py` cierra la sesión en BD al detectar
+expiración). Unificar en un solo módulo exige reescribir las firmas de los 6
+routers y acordar el comportamiento; debe hacerse junto al dueño de `deps.py`.
+
 - `get_current_user` (HU-25, R2): resuelve la sesión del header `Authorization:
   Bearer <token>`, valida el JWT, comprueba que la sesión no esté cerrada ni
   expirada por inactividad y refresca `ultima_actividad`. Devuelve el usuario.

@@ -1,3 +1,14 @@
+"""RBAC y resolución de sesión para los routers de negocio (visitas, sillas, qr,
+accesos).
+
+DEUDA TÉCNICA (unificar con el compañero de seguridad): existe un segundo módulo,
+`app/dependencies.py`, que resuelve la sesión y los roles para los routers de
+seguridad (auth, usuarios). Ambos validan lo mismo (JWT, sesión abierta,
+expiración, inactividad) con contratos distintos (`CurrentUser` dataclass aquí
+vs. `UsuarioPublico` Pydantic allí). Unificar exige reescribir las firmas de los
+6 routers y acordar el comportamiento; debe hacerse de forma coordinada.
+"""
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated, Literal

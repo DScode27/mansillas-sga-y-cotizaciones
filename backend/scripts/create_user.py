@@ -4,7 +4,7 @@ La gestión de usuarios por UI es HU-20 (tarea 6). Mientras tanto, este script
 permite crear el primer usuario interno para probar el login (tarea 2).
 
 Uso (desde backend/, con el venv):
-    .venv/bin/python3.14 create_user.py \
+    .venv/bin/python scripts/create_user.py \
         --nombre "Admin" --correo admin@mansillas.com \
         --password "Secreta123" --rol COMERCIAL_MANSILLAS
 
@@ -14,12 +14,17 @@ Para roles de cliente (ADMIN_CLIENTE/EMPLEADO_CLIENTE) pasar --empresa <id>.
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 
-from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+# El script vive en backend/scripts/; añadimos backend/ al path para importar `app`.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.db import get_engine
-from app.security import hash_password
+from sqlalchemy import text  # noqa: E402
+from sqlalchemy.exc import IntegrityError  # noqa: E402
+
+from app.db import get_engine  # noqa: E402
+from app.security import hash_password  # noqa: E402
 
 _ROLES = (
     "COMERCIAL_MANSILLAS",
