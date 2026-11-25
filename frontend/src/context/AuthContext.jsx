@@ -5,14 +5,17 @@
  *   - `user`           usuario autenticado o null.
  *   - `isAuthenticated`
  *   - `signIn(correo, password)`  llama al endpoint real /auth/login.
- *   - `signOut()`      limpia la sesión local.
+ *   - `signOut()`      revoca la sesión en el backend y limpia la local.
  *   - `hasRole(roles)` helper para la navegación/guards por rol (R3).
  *
  * El hook `useAuth` y el objeto de contexto viven en `auth-context.js`
  * (separados para cumplir la regla de fast-refresh).
  */
 import { useCallback, useMemo, useState } from 'react'
-import { login as loginRequest } from '../api/auth'
+import {
+  login as loginRequest,
+  logout as logoutRequest,
+} from '../api/auth'
 import { clearSession, getStoredUser, saveSession } from '../api/token-store'
 import { AuthContext } from './auth-context'
 
@@ -27,7 +30,15 @@ export function AuthProvider({ children }) {
     return data.usuario
   }, [])
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
+    // Best-effort: revocamos la sesión en el backend (marca fecha_cierre).
+    // Pase lo que pase (red caída, token ya expirado), limpiamos la sesión
+    // local para que el usuario quede fuera de todas formas.
+    try {
+      await logoutRequest()
+    } catch {
+      // Ignorado a propósito: el cierre local es lo que garantiza el logout.
+    }
     clearSession()
     setUser(null)
   }, [])

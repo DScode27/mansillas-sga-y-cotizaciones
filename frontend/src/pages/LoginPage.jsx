@@ -26,6 +26,8 @@ export default function LoginPage() {
   }
 
   const destino = location.state?.from?.pathname ?? '/'
+  // Aviso cuando llegamos aquí por cierre de sesión por inactividad (HU-25).
+  const inactividad = location.state?.reason === 'inactividad'
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -60,6 +62,12 @@ export default function LoginPage() {
             Sistema de Inventario y Cotizaciones
           </p>
         </div>
+
+        {inactividad && !error && (
+          <p className="form-notice" role="status">
+            Tu sesión se cerró por inactividad. Inicia sesión de nuevo.
+          </p>
+        )}
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label className="form-field">

@@ -26,3 +26,9 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     usuario: UsuarioPublico
+
+
+class LogoutResponse(BaseModel):
+    """Confirmación simple del cierre de sesión."""
+
+    detail: str = "Sesión cerrada"

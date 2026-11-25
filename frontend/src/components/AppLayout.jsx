@@ -5,9 +5,11 @@
  * La cabecera muestra el usuario y su rol y ofrece el botón de cerrar sesión.
  * El logo va SIEMPRE sobre fondo blanco (HU-27).
  */
+import { useCallback } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import logoMansillas from '../assets/logoMansillas.jpg'
 import { ROLES } from '../auth/roles'
+import { useInactivityLogout } from '../auth/useInactivityLogout'
 import { useAuth } from '../context/auth-context'
 
 const NAV_ITEMS = [
@@ -30,15 +32,26 @@ function navLinkClass({ isActive }) {
 }
 
 export default function AppLayout() {
-  const { user, hasRole, signOut } = useAuth()
+  const { user, isAuthenticated, hasRole, signOut } = useAuth()
   const navigate = useNavigate()
 
   const visibleItems = NAV_ITEMS.filter((item) => hasRole(item.roles))
 
-  function handleLogout() {
-    signOut()
+  async function handleLogout() {
+    await signOut()
     navigate('/login', { replace: true })
   }
+
+  // Cierre de sesión por inactividad (HU-25). Al expirar, avisamos en /login.
+  const handleInactivity = useCallback(async () => {
+    await signOut()
+    navigate('/login', {
+      replace: true,
+      state: { reason: 'inactividad' },
+    })
+  }, [signOut, navigate])
+
+  useInactivityLogout(isAuthenticated, handleInactivity)
 
   return (
     <div className="app-shell">
