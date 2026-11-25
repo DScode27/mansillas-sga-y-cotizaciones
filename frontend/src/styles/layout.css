@@ -287,3 +287,108 @@
   opacity: 0.7;
   cursor: not-allowed;
 }
+
+/* Páginas con varias tarjetas apiladas (p. ej. gestión de usuarios). */
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Formulario de alta en rejilla responsive. */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.form-actions {
+  grid-column: 1 / -1;
+}
+
+/* Mensajes que ocupan todo el ancho de la rejilla del formulario. */
+.form-grid .form-error,
+.form-grid .form-success {
+  grid-column: 1 / -1;
+}
+
+.form-success {
+  margin: 0;
+  color: var(--color-exito);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Estados de carga / vacío / error de los listados. */
+.state-text {
+  margin: 0.5rem 0 0;
+  color: var(--color-texto-suave);
+}
+
+.state-error {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.state-error p {
+  margin: 0;
+  color: var(--color-error);
+}
+
+/* Tabla de datos con scroll horizontal en móvil. */
+.table-wrap {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--color-borde);
+}
+
+.data-table th {
+  color: var(--color-texto-suave);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.data-table tbody tr:hover {
+  background: var(--color-fondo);
+}
+
+/* Insignias de estado. */
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge--ok {
+  background: rgba(46, 125, 50, 0.12);
+  color: var(--color-exito);
+}
+
+.badge--off {
+  background: rgba(127, 127, 129, 0.15);
+  color: var(--color-texto-suave);
+}
