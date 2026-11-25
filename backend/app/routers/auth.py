@@ -45,6 +45,12 @@ def login(payload: LoginRequest, db: Connection = Depends(get_db)) -> LoginRespo
     )
 
 
+@router.get("/me", response_model=UsuarioPublico)
+def me(user: UsuarioPublico = Depends(get_current_user)) -> UsuarioPublico:
+    """Devuelve el usuario de la sesión actual (útil para rehidratar el cliente)."""
+    return user
+
+
 @router.post("/logout", response_model=LogoutResponse)
 def logout(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
