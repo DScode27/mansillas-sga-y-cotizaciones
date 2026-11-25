@@ -1,31 +1,59 @@
+"""Database access with SQLAlchemy over the existing `mansillas` schema.
+
+The engine keeps two safety nets so queries always see the application schema,
+even behind Supabase's pgbouncer in transaction mode (where startup `options`
+are ignored):
+  * `connect_args` sets `search_path` when the connection is created.
+  * a `begin` listener runs `SET LOCAL search_path` inside every transaction.
+"""
+
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from app.config import settings
+from app.config import get_settings, normalizar_database_url
+
+__all__ = [
+    "Base",
+    "SessionLocal",
+    "engine",
+    "get_db",
+    "get_engine",
+    "normalizar_database_url",
+]
+
+_engine: Engine | None = None
 
 
-def normalizar_database_url(url: str) -> str:
-    """Force the `psycopg` (v3) driver required by the design.
+def get_engine() -> Engine:
+    """Build (once) the engine for the configured database."""
+    global _engine
+    if _engine is None:
+        actual = get_settings()
+        if not actual.database_url:
+            raise RuntimeError(
+                "DATABASE_URL must be set in backend/.env or the environment"
+            )
 
-    A bare `postgresql://` URL lets SQLAlchemy pick whichever PostgreSQL DBAPI
-    happens to be installed, so it is rewritten to `postgresql+psycopg://`.
-    """
-    if url.startswith("postgresql://"):
-        return "postgresql+psycopg://" + url[len("postgresql://") :]
-    return url
+        # libpq splits `options` on spaces, so the list must not contain any.
+        search_path_option = f"{actual.db_schema},public"
+        search_path_sql = f"{actual.db_schema}, public"
+        _engine = create_engine(
+            actual.sqlalchemy_url,
+            pool_pre_ping=True,
+            connect_args={"options": f"-csearch_path={search_path_option}"},
+        )
+
+        @event.listens_for(_engine, "begin")
+        def _set_search_path(conn) -> None:  # pragma: no cover - connection effect
+            conn.exec_driver_sql(f"SET LOCAL search_path TO {search_path_sql}")
+
+    return _engine
 
 
-if not settings.database_url:
-    raise RuntimeError("DATABASE_URL must be set in backend/.env or the environment")
-
-engine = create_engine(
-    normalizar_database_url(settings.database_url),
-    pool_pre_ping=True,
-    connect_args={"options": f"-c search_path={settings.db_schema}"},
-)
-
+engine = get_engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

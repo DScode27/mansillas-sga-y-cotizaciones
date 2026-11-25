@@ -31,6 +31,7 @@ from sqlalchemy import text  # noqa: E402
 
 from app.db import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
+from app.security import hash_password  # noqa: E402
 from app.models import (  # noqa: E402
     Departamento,
     Empleado,
@@ -194,12 +195,14 @@ class Fabrica:
         rol: str = "TECNICO",
         empresa: Empresa | None = None,
         nombre: str = "Usuario",
+        password: str | None = None,
     ) -> Usuario:
         numero = self._siguiente()
         usuario = Usuario(
             id_empresa=empresa.id_empresa if empresa is not None else None,
             nombre=f"{nombre} {numero}",
             correo=f"usuario{numero}@test.local",
+            password_hash=hash_password(password) if password else None,
             rol=rol,
             activo=True,
         )
