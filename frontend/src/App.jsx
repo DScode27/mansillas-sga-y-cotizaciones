@@ -15,6 +15,7 @@ import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
 import PlaceholderPage from './pages/PlaceholderPage'
+import UsuariosPage from './pages/UsuariosPage'
 
 export default function App() {
   return (
@@ -27,7 +28,7 @@ export default function App() {
 
           {/* Solo COMERCIAL_MANSILLAS gestiona usuarios (HU-20). */}
           <Route element={<RequireRole roles={[ROLES.COMERCIAL_MANSILLAS]} />}>
-            <Route path="usuarios" element={<PlaceholderPage title="Usuarios" />} />
+            <Route path="usuarios" element={<UsuariosPage />} />
           </Route>
 
           <Route
