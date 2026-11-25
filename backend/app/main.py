@@ -1,7 +1,8 @@
 """Aplicación FastAPI de MansillasSIC (parte de seguridad de Nicolás).
 
-Monta CORS para el frontend Vite y registra los routers. Por ahora solo
-autenticación (HU-21); las siguientes HU añaden sus propios routers.
+Monta CORS para el frontend Vite y registra los routers de seguridad:
+autenticación (HU-21/25) y gestión de usuarios (HU-20). Las siguientes HU añaden
+sus propios routers.
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .routers import auth
+from .routers import auth, usuarios
 
 settings = get_settings()
 
@@ -25,6 +26,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(usuarios.router)
 
 
 @app.get("/health", tags=["health"])
