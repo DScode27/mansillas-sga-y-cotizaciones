@@ -153,3 +153,127 @@
     flex-wrap: wrap;
   }
 }
+
+/* Cabecera: bloque de usuario + cerrar sesión. */
+.app-header__user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-header__user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+}
+
+.app-header__user-name {
+  font-weight: 600;
+  color: var(--color-texto);
+}
+
+.app-header__user-role {
+  font-size: 0.75rem;
+  color: var(--color-texto-suave);
+}
+
+/* Pantalla de login (fuera del layout con sidebar). */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--color-fondo);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+}
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+}
+
+/* El logo siempre sobre fondo blanco (HU-27). */
+.login-brand__logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  background: var(--color-sobre-primario);
+  border-radius: var(--radio);
+  padding: 4px;
+}
+
+.login-brand__title {
+  margin: 0.5rem 0 0;
+}
+
+.login-brand__subtitle {
+  margin: 0;
+  color: var(--color-texto-suave);
+  font-size: 0.9rem;
+}
+
+/* Formularios. */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-field__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-texto);
+}
+
+.form-field__input {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-sm);
+  background: var(--color-superficie);
+  color: var(--color-texto);
+  font: inherit;
+}
+
+.form-field__input:focus {
+  outline: none;
+  border-color: var(--color-primario);
+  box-shadow: 0 0 0 2px rgba(255, 145, 78, 0.25);
+}
+
+.form-field__input:disabled {
+  background: var(--color-fondo);
+  opacity: 0.7;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--color-error);
+  font-size: 0.9rem;
+}
+
+.login-form__submit {
+  justify-content: center;
+  width: 100%;
+  padding: 0.6rem;
+}
+
+.btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
