@@ -26,6 +26,16 @@ const NAV_ITEMS = [
     label: 'Levantamiento',
     roles: [ROLES.TECNICO, ROLES.COMERCIAL_MANSILLAS],
   },
+  {
+    to: '/comercial',
+    label: 'Portal comercial',
+    roles: [ROLES.COMERCIAL_MANSILLAS],
+  },
+  {
+    to: '/cliente',
+    label: 'Portal cliente',
+    roles: [ROLES.ADMIN_CLIENTE],
+  },
 ]
 
 function navLinkClass({ isActive }) {

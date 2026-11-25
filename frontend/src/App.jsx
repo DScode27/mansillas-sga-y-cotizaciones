@@ -15,7 +15,10 @@ import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import EmpresasPage from './pages/EmpresasPage'
 import LevantamientoPage from './pages/LevantamientoPage'
+import PortalComercialPage from './pages/PortalComercialPage'
+import PortalClientePage from './pages/PortalClientePage'
 import NotFoundPage from './pages/NotFoundPage'
+import QrPublicoPage from './pages/QrPublicoPage'
 import UsuariosPage from './pages/UsuariosPage'
 import VisitasPage from './pages/VisitasPage'
 
@@ -23,6 +26,10 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+
+      {/* Vista pública por QR (M6, R10): sin login ni OTP. Va fuera de
+          RequireAuth para que cualquiera que escanee el QR vea la ficha. */}
+      <Route path="/qr/:token" element={<QrPublicoPage />} />
 
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
@@ -57,6 +64,18 @@ export default function App() {
             }
           >
             <Route path="levantamiento" element={<LevantamientoPage />} />
+          </Route>
+
+          {/* Portal comercial (M5): el COMERCIAL_MANSILLAS revisa las sillas
+              levantadas y crea precotizaciones en borrador. */}
+          <Route element={<RequireRole roles={[ROLES.COMERCIAL_MANSILLAS]} />}>
+            <Route path="comercial" element={<PortalComercialPage />} />
+          </Route>
+
+          {/* Portal cliente (M7): el ADMIN_CLIENTE consulta en solo lectura las
+              sillas y precotizaciones de su propia empresa (aislamiento, R4). */}
+          <Route element={<RequireRole roles={[ROLES.ADMIN_CLIENTE]} />}>
+            <Route path="cliente" element={<PortalClientePage />} />
           </Route>
         </Route>
       </Route>
