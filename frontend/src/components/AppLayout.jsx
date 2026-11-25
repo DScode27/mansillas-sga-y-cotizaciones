@@ -37,14 +37,14 @@ export default function AppLayout() {
 
   const visibleItems = NAV_ITEMS.filter((item) => hasRole(item.roles))
 
-  async function handleLogout() {
-    await signOut()
+  function handleLogout() {
+    signOut()
     navigate('/login', { replace: true })
   }
 
   // Cierre de sesión por inactividad (HU-25). Al expirar, avisamos en /login.
-  const handleInactivity = useCallback(async () => {
-    await signOut()
+  const handleInactivity = useCallback(() => {
+    signOut()
     navigate('/login', {
       replace: true,
       state: { reason: 'inactividad' },
