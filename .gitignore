@@ -72,3 +72,4 @@ temp/
 # ARCHIVOS DE CONFIGURACIÓN LOCAL
 # =================================
 .python-version.local
+.kiro
