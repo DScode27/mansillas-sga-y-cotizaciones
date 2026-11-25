@@ -13,6 +13,7 @@ import RequireRole from './auth/RequireRole'
 import AppLayout from './components/AppLayout'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
+import EmpresasPage from './pages/EmpresasPage'
 import NotFoundPage from './pages/NotFoundPage'
 import PlaceholderPage from './pages/PlaceholderPage'
 import UsuariosPage from './pages/UsuariosPage'
@@ -31,12 +32,10 @@ export default function App() {
             <Route path="usuarios" element={<UsuariosPage />} />
           </Route>
 
-          <Route
-            element={
-              <RequireRole roles={[ROLES.COMERCIAL_MANSILLAS, ROLES.ADMIN_CLIENTE]} />
-            }
-          >
-            <Route path="empresas" element={<PlaceholderPage title="Empresas" />} />
+          {/* Alta de empresa y empleados (M2): acción de comercial. El portal
+              cliente de solo lectura (ADMIN_CLIENTE) llega en su propia tarea. */}
+          <Route element={<RequireRole roles={[ROLES.COMERCIAL_MANSILLAS]} />}>
+            <Route path="empresas" element={<EmpresasPage />} />
           </Route>
 
           <Route

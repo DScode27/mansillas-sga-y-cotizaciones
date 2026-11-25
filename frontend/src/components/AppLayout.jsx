@@ -15,11 +15,7 @@ import { useAuth } from '../context/auth-context'
 const NAV_ITEMS = [
   { to: '/', label: 'Inicio', end: true, roles: [] },
   { to: '/usuarios', label: 'Usuarios', roles: [ROLES.COMERCIAL_MANSILLAS] },
-  {
-    to: '/empresas',
-    label: 'Empresas',
-    roles: [ROLES.COMERCIAL_MANSILLAS, ROLES.ADMIN_CLIENTE],
-  },
+  { to: '/empresas', label: 'Empresas', roles: [ROLES.COMERCIAL_MANSILLAS] },
   {
     to: '/visitas',
     label: 'Visitas',
