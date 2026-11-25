@@ -1,0 +1,32 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Mansillas SGA backend API (FastAPI)"
+authors = [
+    { name = "DScode27", email = "davidsonsanchez1123@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.165.0",
+    "pydantic-settings>=2.6.1",
+    "psycopg[binary]>=3.2.3",
+    "qrcode[pil]>=8.0",
+    "reportlab>=4.2.5",
+    "sqlalchemy>=2.0.36",
+    "supabase>=2.34.1",
+    "user-agents>=2.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8.3.4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.uv]
+package = false
