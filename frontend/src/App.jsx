@@ -14,9 +14,10 @@ import AppLayout from './components/AppLayout'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import EmpresasPage from './pages/EmpresasPage'
+import LevantamientoPage from './pages/LevantamientoPage'
 import NotFoundPage from './pages/NotFoundPage'
-import PlaceholderPage from './pages/PlaceholderPage'
 import UsuariosPage from './pages/UsuariosPage'
+import VisitasPage from './pages/VisitasPage'
 
 export default function App() {
   return (
@@ -45,7 +46,17 @@ export default function App() {
               />
             }
           >
-            <Route path="visitas" element={<PlaceholderPage title="Visitas" />} />
+            <Route path="visitas" element={<VisitasPage />} />
+          </Route>
+
+          {/* Levantamiento móvil (HU-28): trabajo en sitio del TECNICO; el
+              COMERCIAL_MANSILLAS también puede entrar para seguimiento. */}
+          <Route
+            element={
+              <RequireRole roles={[ROLES.TECNICO, ROLES.COMERCIAL_MANSILLAS]} />
+            }
+          >
+            <Route path="levantamiento" element={<LevantamientoPage />} />
           </Route>
         </Route>
       </Route>
