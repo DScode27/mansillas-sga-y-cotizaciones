@@ -1,0 +1,84 @@
+/* Identidad visual MansillasSIC — tema central (modo claro).
+   Cambiar un color aquí lo actualiza en toda la app. */
+:root {
+  /* Paleta de marca */
+  --color-primario: #ff914e;        /* naranja Mansillas */
+  --color-neutro:   #7f7f81;        /* gris */
+  --color-fondo:    #ffffff;        /* blanco */
+
+  /* Texto */
+  --color-texto:          #2b2b2b;  /* texto principal sobre fondo blanco */
+  --color-texto-suave:    #7f7f81;  /* texto secundario (gris de marca) */
+  --color-sobre-primario: #ffffff;  /* texto/íconos sobre naranja (máx. contraste) */
+
+  /* Superficies y bordes */
+  --color-superficie: #ffffff;      /* tarjetas, inputs */
+  --color-borde:      #e3e3e4;      /* bordes suaves (derivado del gris) */
+
+  /* Estados derivados del primario */
+  --color-primario-hover:  #f07e36; /* naranja un poco más oscuro al pasar el cursor */
+  --color-primario-activo: #e06f29;
+
+  /* Feedback (estados de carga/error/éxito/vacío) */
+  --color-error:   #c0392b;
+  --color-exito:   #2e7d32;
+  --color-aviso:   #ff914e;         /* reutiliza el naranja de marca */
+
+  /* Tipografía y radios */
+  --fuente: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --radio:  8px;
+  --radio-sm: 4px;
+
+  /* Sombras */
+  --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --sombra-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  /* Medidas del layout */
+  --ancho-sidebar:    240px;
+  --alto-header:      56px;
+  --ancho-contenido:  1200px;
+}
+
+/* MVP en modo claro: forzamos esquema claro (ignora preferencia oscura del SO). */
+:root { color-scheme: light; }
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-fondo);
+  color: var(--color-texto);
+  font-family: var(--fuente);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-primario);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 0.5rem;
+  line-height: 1.25;
+}
+
+button {
+  font: inherit;
+}
