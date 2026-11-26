@@ -19,6 +19,13 @@ from sqlalchemy.orm import Session
 from ..config import settings
 
 
+class NombreDepartamentoEnUso(Exception):
+    """Ya existe un departamento con ese nombre en la sede (→ 409).
+
+    Corresponde a la restricción `UNIQUE (id_empresa, id_sede, nombre)` del SQL.
+    """
+
+
 def empresa_de_sede(db: Session, *, id_sede: int) -> int | None:
     """Devuelve el `id_empresa` dueño de la sede, o `None` si la sede no existe.
 
@@ -59,3 +66,50 @@ def listar_departamentos(db: Session, *, id_sede: int) -> list[dict]:
     ).mappings().all()
 
     return [dict(fila) for fila in filas]
+
+
+def crear_departamento(
+    db: Session,
+    *,
+    id_empresa: int,
+    id_sede: int,
+    nombre: str,
+) -> dict:
+    """Crea un departamento en una sede y devuelve sus columnas (`DepartamentoOut`).
+
+    El `id_empresa` lo resuelve el router con `empresa_de_sede` (la sede ya se
+    validó allí) y el `id_sede` viene de la ruta: el cliente no digita
+    identificadores. Rechaza un nombre repetido en la misma sede
+    (`NombreDepartamentoEnUso` → 409, por `UNIQUE (id_empresa, id_sede, nombre)`).
+    Confirma con `db.commit()` porque `get_db` revierte al cerrar la petición.
+    Raises NombreDepartamentoEnUso.
+    """
+    schema = settings.db_schema
+
+    duplicado = db.execute(
+        text(
+            f"""
+            SELECT 1 FROM {schema}.departamento
+            WHERE id_empresa = :id_empresa
+              AND id_sede = :id_sede
+              AND nombre = :nombre
+            """
+        ),
+        {"id_empresa": id_empresa, "id_sede": id_sede, "nombre": nombre},
+    ).first()
+    if duplicado is not None:
+        raise NombreDepartamentoEnUso
+
+    fila = db.execute(
+        text(
+            f"""
+            INSERT INTO {schema}.departamento (id_empresa, id_sede, nombre)
+            VALUES (:id_empresa, :id_sede, :nombre)
+            RETURNING id_departamento, id_empresa, id_sede, nombre
+            """
+        ),
+        {"id_empresa": id_empresa, "id_sede": id_sede, "nombre": nombre},
+    ).mappings().first()
+    db.commit()
+
+    return dict(fila)

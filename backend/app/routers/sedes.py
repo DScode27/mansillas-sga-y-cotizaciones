@@ -16,10 +16,17 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import CurrentUser, require_role
-from app.schemas import SedeOut
+from app.schemas import SedeCreate, SedeOut
 from app.services import sedes_service
 
 router = APIRouter(prefix="/empresas", tags=["sedes"])
+
+# Roles que pueden registrar sedes: el comercial (cualquier empresa) y el
+# ADMIN_CLIENTE (solo la suya; lo acota `autorizar_empresa`).
+AltaSedeUser = Annotated[
+    CurrentUser,
+    Depends(require_role("COMERCIAL_MANSILLAS", "ADMIN_CLIENTE")),
+]
 
 # Roles con visibilidad de catálogos; el alcance concreto lo decide el router
 # (internos: cualquier empresa; ADMIN_CLIENTE: solo la suya).
@@ -56,3 +63,38 @@ def listar_sedes(
     """
     autorizar_empresa(user, id_empresa)
     return sedes_service.listar_sedes(db, id_empresa=id_empresa)
+
+
+@router.post(
+    "/{id_empresa}/sedes",
+    response_model=SedeOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def crear_sede(
+    id_empresa: int,
+    payload: SedeCreate,
+    db: Annotated[Session, Depends(get_db)],
+    user: AltaSedeUser,
+) -> dict:
+    """Registra una sede en `id_empresa` dentro del alcance del rol.
+
+    El comercial crea en cualquier empresa; el `ADMIN_CLIENTE` solo en la suya
+    (403 en otro caso). Una empresa inexistente responde 404 y un nombre ya
+    usado en esa empresa, 409 (`UNIQUE (id_empresa, nombre)`).
+    """
+    autorizar_empresa(user, id_empresa)
+    try:
+        return sedes_service.crear_sede(
+            db,
+            id_empresa=id_empresa,
+            nombre=payload.nombre,
+            direccion=payload.direccion,
+            ciudad=payload.ciudad,
+        )
+    except sedes_service.EmpresaNoEncontrada:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No encontrado") from None
+    except sedes_service.NombreSedeEnUso:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Ya existe una sede con ese nombre en la empresa",
+        ) from None

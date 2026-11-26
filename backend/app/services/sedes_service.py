@@ -19,6 +19,17 @@ from sqlalchemy.orm import Session
 from ..config import settings
 
 
+class EmpresaNoEncontrada(Exception):
+    """No existe la empresa indicada para colgar la sede (→ 404)."""
+
+
+class NombreSedeEnUso(Exception):
+    """Ya existe una sede con ese nombre en la empresa (→ 409).
+
+    Corresponde a la restricción `UNIQUE (id_empresa, nombre)` del SQL.
+    """
+
+
 def listar_sedes(db: Session, *, id_empresa: int) -> list[dict]:
     """Devuelve las sedes de `id_empresa`, ordenadas por `id_sede`.
 
@@ -40,3 +51,61 @@ def listar_sedes(db: Session, *, id_empresa: int) -> list[dict]:
     ).mappings().all()
 
     return [dict(fila) for fila in filas]
+
+
+def crear_sede(
+    db: Session,
+    *,
+    id_empresa: int,
+    nombre: str,
+    direccion: str | None,
+    ciudad: str | None,
+) -> dict:
+    """Crea una sede en `id_empresa` y devuelve sus columnas (`SedeOut`).
+
+    Valida primero que la empresa exista (`EmpresaNoEncontrada` → 404) y que el
+    nombre no esté repetido en esa empresa (`NombreSedeEnUso` → 409, por la
+    restricción `UNIQUE (id_empresa, nombre)`). El `id_empresa` viene de la ruta,
+    nunca del cuerpo. Confirma con `db.commit()` porque `get_db` revierte al
+    cerrar la petición.
+    Raises EmpresaNoEncontrada, NombreSedeEnUso.
+    """
+    schema = settings.db_schema
+
+    empresa = db.execute(
+        text(f"SELECT 1 FROM {schema}.empresa WHERE id_empresa = :id_empresa"),
+        {"id_empresa": id_empresa},
+    ).first()
+    if empresa is None:
+        raise EmpresaNoEncontrada
+
+    duplicada = db.execute(
+        text(
+            f"""
+            SELECT 1 FROM {schema}.sede
+            WHERE id_empresa = :id_empresa AND nombre = :nombre
+            """
+        ),
+        {"id_empresa": id_empresa, "nombre": nombre},
+    ).first()
+    if duplicada is not None:
+        raise NombreSedeEnUso
+
+    fila = db.execute(
+        text(
+            f"""
+            INSERT INTO {schema}.sede (id_empresa, nombre, direccion, ciudad)
+            VALUES (:id_empresa, :nombre, :direccion, :ciudad)
+            RETURNING id_sede, id_empresa, nombre, direccion, ciudad
+            """
+        ),
+        {
+            "id_empresa": id_empresa,
+            "nombre": nombre,
+            "direccion": direccion,
+            "ciudad": ciudad,
+        },
+    ).mappings().first()
+    db.commit()
+
+    return dict(fila)

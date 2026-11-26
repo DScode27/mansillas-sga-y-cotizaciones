@@ -1,48 +1,27 @@
-/* API de empresas (recurso de otro dev, mockeable).
+/* API del catálogo de empresas cliente.
  *
- * Patrón de mock conmutable: mientras `USE_MOCK.empresas` sea `true`, devuelve
- * datos simulados; al poner la bandera en `false` pega al endpoint real sin
- * cambiar las pantallas que lo consumen. El alta de empresa es la pantalla
- * mínima del MVP (nombre + NIT únicos, R6); sedes/departamentos vienen después.
+ * Consume el backend real: `GET /empresas` (listado dentro del alcance del rol:
+ * los internos ven todas, el ADMIN_CLIENTE solo la suya) y `POST /empresas`
+ * (alta, solo COMERCIAL_MANSILLAS). El interceptor de `apiClient` adjunta el
+ * JWT; los errores HTTP se propagan tal cual para que las pantallas mapeen
+ * 409 (NIT duplicado), 400/422 (datos inválidos) y 403 (sin permiso).
  */
 import { apiClient } from './client'
-import { USE_MOCK } from './mocks'
 
-// Store en memoria para el mock: permite ver reflejadas las altas durante la
-// sesión mientras el endpoint real no existe. Se reinicia al recargar.
-const empresasMock = [
-  { id_empresa: 1, nombre: 'Empresa Demo S.A.', nit: '900123456-7', activa: true },
-]
-let proximoIdMock = 2
-
+/* Lista las empresas visibles para el usuario autenticado.
+ *
+ * Devuelve [{ id_empresa, nombre, nit, correo, telefono, permiso_qr, activa }]
+ * (EmpresaOut). El backend aplica el alcance por rol. */
 export async function listEmpresas() {
-  if (USE_MOCK.empresas) {
-    return [...empresasMock]
-  }
   const { data } = await apiClient.get('/empresas')
   return data
 }
 
+/* Crea una empresa (solo COMERCIAL_MANSILLAS en el backend).
+ *
+ * `nombre` y `nit` son obligatorios; `correo` y `telefono` opcionales (se
+ * mandan como null si vienen vacíos). Un NIT ya usado responde 409. */
 export async function createEmpresa({ nombre, nit, correo, telefono }) {
-  if (USE_MOCK.empresas) {
-    const nitNormalizado = nit.trim()
-    if (empresasMock.some((e) => e.nit === nitNormalizado)) {
-      // Imita el 409 por NIT duplicado del backend real para que la pantalla
-      // ejercite esa rama de error también en modo mock.
-      throw { response: { status: 409 } }
-    }
-    const empresa = {
-      id_empresa: proximoIdMock++,
-      nombre: nombre.trim(),
-      nit: nitNormalizado,
-      correo: correo?.trim() || null,
-      telefono: telefono?.trim() || null,
-      activa: true,
-    }
-    empresasMock.push(empresa)
-    return empresa
-  }
-
   const { data } = await apiClient.post('/empresas', {
     nombre: nombre.trim(),
     nit: nit.trim(),

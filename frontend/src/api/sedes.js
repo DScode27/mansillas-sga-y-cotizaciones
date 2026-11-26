@@ -17,3 +17,22 @@ export async function listSedes(idEmpresa) {
   const { data } = await apiClient.get(`/empresas/${idEmpresa}/sedes`)
   return data
 }
+
+/* Registra una sede en una empresa (`POST /empresas/{idEmpresa}/sedes`).
+ *
+ * La empresa va en la ruta, no en el cuerpo: el usuario la elige de un
+ * desplegable y no digita su ID. `nombre` es obligatorio; `direccion` y
+ * `ciudad` opcionales (se mandan como null si vienen vacíos). El backend
+ * impone el RBAC (comercial cualquier empresa; ADMIN_CLIENTE solo la suya) y
+ * responde 404 (empresa inexistente) o 409 (nombre duplicado en la empresa);
+ * los errores se propagan tal cual para que la pantalla los mapee.
+ *
+ * Devuelve { id_sede, id_empresa, nombre, direccion, ciudad } (SedeOut). */
+export async function createSede(idEmpresa, { nombre, direccion, ciudad }) {
+  const { data } = await apiClient.post(`/empresas/${idEmpresa}/sedes`, {
+    nombre: nombre.trim(),
+    direccion: direccion?.trim() || null,
+    ciudad: ciudad?.trim() || null,
+  })
+  return data
+}

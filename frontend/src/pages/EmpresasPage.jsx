@@ -13,6 +13,8 @@
 import { useEffect, useState } from 'react'
 import { createEmpresa, listEmpresas } from '../api/empresas'
 import EmpleadosSection from '../components/EmpleadosSection'
+import SedesSection from '../components/SedesSection'
+import DepartamentosSection from '../components/DepartamentosSection'
 
 const EMPRESA_INICIAL = { nombre: '', nit: '', correo: '', telefono: '' }
 
@@ -27,6 +29,10 @@ export default function EmpresasPage() {
   const [exito, setExito] = useState('')
 
   const [empresaSel, setEmpresaSel] = useState('')
+
+  // Contador que avanza al crear una sede. Lo observa la sección de
+  // departamentos para recargar el desplegable de sedes y ver la recién creada.
+  const [refrescoSedes, setRefrescoSedes] = useState(0)
 
   async function cargarEmpresas() {
     setCargando(true)
@@ -204,6 +210,13 @@ export default function EmpresasPage() {
           </div>
         )}
       </section>
+
+      <SedesSection
+        empresas={empresas}
+        onSedeCreada={() => setRefrescoSedes((n) => n + 1)}
+      />
+
+      <DepartamentosSection empresas={empresas} refrescoSedes={refrescoSedes} />
 
       <section className="card">
         <h2>Empleados</h2>

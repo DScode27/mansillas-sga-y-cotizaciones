@@ -122,6 +122,65 @@ class InventarioItemOut(BaseModel):
     estado: str
 
 
+# --- Catálogo organizacional: alta de empresa, sede y departamento ---------
+
+class EmpresaCreate(BaseModel):
+    """Datos para dar de alta una empresa cliente.
+
+    `nombre` y `nit` son obligatorios (el `nit` es UNIQUE en el SQL; el service
+    traduce su violación a un 409). `correo` y `telefono` son opcionales, igual
+    que en la tabla `empresa`. `permiso_qr` y `activa` no se reciben: los fija el
+    SQL con sus valores por defecto.
+    """
+
+    nombre: str = Field(min_length=1, max_length=150)
+    nit: str = Field(min_length=1, max_length=30)
+    correo: str | None = Field(default=None, max_length=150)
+    telefono: str | None = Field(default=None, max_length=30)
+
+
+class EmpresaOut(BaseModel):
+    """Empresa cliente devuelta por el listado y el alta.
+
+    Expone todas las columnas de la tabla `empresa`, incluidas `permiso_qr` y
+    `activa` que fija el SQL por defecto, para que el frontend pueda mostrarlas.
+    """
+
+    id_empresa: int
+    nombre: str
+    nit: str
+    correo: str | None = None
+    telefono: str | None = None
+    permiso_qr: int
+    activa: bool
+
+
+class SedeCreate(BaseModel):
+    """Datos para registrar una sede dentro de una empresa.
+
+    La empresa dueña llega por la ruta (`POST /empresas/{id_empresa}/sedes`), no
+    en el cuerpo. `nombre` es obligatorio y único por empresa en el SQL
+    (`UNIQUE (id_empresa, nombre)`; el service lo traduce a 409); `direccion` y
+    `ciudad` son opcionales.
+    """
+
+    nombre: str = Field(min_length=1, max_length=150)
+    direccion: str | None = Field(default=None, max_length=250)
+    ciudad: str | None = Field(default=None, max_length=100)
+
+
+class DepartamentoCreate(BaseModel):
+    """Datos para registrar un departamento (área) dentro de una sede.
+
+    La sede (y, a través de ella, la empresa) llega por la ruta
+    (`POST /sedes/{id_sede}/departamentos`), no en el cuerpo: el cliente no
+    digita identificadores. `nombre` es obligatorio y único por sede en el SQL
+    (`UNIQUE (id_empresa, id_sede, nombre)`; el service lo traduce a 409).
+    """
+
+    nombre: str = Field(min_length=1, max_length=120)
+
+
 # --- Catálogos de listado: sedes, departamentos, empleados (Fase 4, R9) -----
 
 class SedeOut(BaseModel):
