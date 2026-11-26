@@ -235,6 +235,18 @@
   gap: 0.35rem;
 }
 
+/* Campo en línea para casillas de verificación: la casilla y su etiqueta en una
+ * sola fila alineada verticalmente (p. ej. confirmación de validación, HU-12). */
+.form-field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-field--inline .form-field__label {
+  font-weight: 400;
+}
+
 .form-field__label {
   font-size: 0.85rem;
   font-weight: 600;

@@ -19,6 +19,7 @@ import { listSillas, COMPONENTES } from '../api/sillas'
 import {
   listPrecotizaciones,
   createPrecotizacion,
+  enviarPrecotizacion,
   listAccesos,
 } from '../api/precotizaciones'
 import { descargarQrPdf } from '../api/qr'
@@ -39,6 +40,18 @@ function mensajeErrorQrPdf(status) {
 function mensajeErrorInventario(status) {
   if (status === 400) return 'Formato de exportación no admitido.'
   return 'No se pudo exportar el inventario. Inténtalo de nuevo.'
+}
+
+// Mensaje legible por código HTTP al enviar la precotización al cliente (RF-13).
+// El cuerpo crudo del backend nunca se muestra al usuario.
+function mensajeErrorEnviar(status) {
+  if (status === 422) return 'Correo inválido o falta confirmar la validación.'
+  if (status === 409)
+    return 'La precotización no se puede enviar a ese destinatario en su estado actual.'
+  if (status === 503) return 'El envío de correo no está configurado.'
+  if (status === 502) return 'No fue posible enviar el correo. Inténtalo de nuevo.'
+  if (status === 404) return 'La precotización ya no existe.'
+  return 'No se pudo enviar la precotización. Inténtalo de nuevo.'
 }
 
 const COMPONENTE_NOMBRE = new Map(
@@ -88,6 +101,18 @@ export default function PortalComercialPage() {
   const [accesos, setAccesos] = useState([])
   const [cargandoAccesos, setCargandoAccesos] = useState(false)
   const [errorAccesos, setErrorAccesos] = useState('')
+
+  // Envío de la precotización al cliente (RF-13). `envioAbierto` guarda el id de
+  // la fila BORRADOR con el formulario desplegado; `correoEnvio`/`confirmoEnvio`
+  // son los campos del form inline. `enviandoId` es el id en curso (deshabilita
+  // controles durante la petición) y `errorEnvio` el mensaje mapeado por código.
+  const [envioAbierto, setEnvioAbierto] = useState(null)
+  const [correoEnvio, setCorreoEnvio] = useState('')
+  const [confirmoEnvio, setConfirmoEnvio] = useState(false)
+  const [enviandoId, setEnviandoId] = useState(null)
+  const [errorEnvio, setErrorEnvio] = useState('')
+  // Id de la fila cuyo envío falló, para mostrar el error solo bajo esa fila.
+  const [errorEnvioId, setErrorEnvioId] = useState(null)
 
   const idEmpresaSel = empresaSel ? Number(empresaSel) : null
   const idVisitaSel = visitaSel ? Number(visitaSel) : null
@@ -289,6 +314,67 @@ export default function PortalComercialPage() {
       setErrorAccesos('No se pudieron cargar los accesos.')
     } finally {
       setCargandoAccesos(false)
+    }
+  }
+
+  // Abre/cierra el formulario inline de "Enviar al cliente" de una fila BORRADOR
+  // y limpia los campos y el error al alternar.
+  function toggleEnvio(idPrecotizacion) {
+    setErrorEnvio('')
+    setErrorEnvioId(null)
+    if (envioAbierto === idPrecotizacion) {
+      setEnvioAbierto(null)
+      return
+    }
+    setEnvioAbierto(idPrecotizacion)
+    setCorreoEnvio('')
+    setConfirmoEnvio(false)
+  }
+
+  // Envía por primera vez una precotización BORRADOR con el correo capturado y
+  // la confirmación de validación del levantamiento (HU-12). Tras el éxito,
+  // cierra el formulario y recarga la lista para reflejar ENVIADA y su fecha.
+  async function handleEnviar(event, idPrecotizacion) {
+    event.preventDefault()
+    setErrorEnvio('')
+    setErrorEnvioId(null)
+    setEnviandoId(idPrecotizacion)
+    try {
+      await enviarPrecotizacion({
+        id: idPrecotizacion,
+        correo_cliente: correoEnvio,
+        confirmar_validacion: true,
+      })
+      setEnvioAbierto(null)
+      setCorreoEnvio('')
+      setConfirmoEnvio(false)
+      await recargarPrecotizaciones()
+    } catch (err) {
+      setErrorEnvio(mensajeErrorEnviar(err.response?.status))
+      setErrorEnvioId(idPrecotizacion)
+    } finally {
+      setEnviandoId(null)
+    }
+  }
+
+  // Reenvía una precotización ENVIADA reusando el correo guardado, sin pedir de
+  // nuevo la confirmación ni cambiar el destinatario. Recarga tras el éxito.
+  async function handleReenviar(precotizacion) {
+    setErrorEnvio('')
+    setErrorEnvioId(null)
+    setEnviandoId(precotizacion.id_precotizacion)
+    try {
+      await enviarPrecotizacion({
+        id: precotizacion.id_precotizacion,
+        correo_cliente: precotizacion.correo_cliente,
+        confirmar_validacion: false,
+      })
+      await recargarPrecotizaciones()
+    } catch (err) {
+      setErrorEnvio(mensajeErrorEnviar(err.response?.status))
+      setErrorEnvioId(precotizacion.id_precotizacion)
+    } finally {
+      setEnviandoId(null)
     }
   }
 
@@ -539,26 +625,67 @@ export default function PortalComercialPage() {
                     <th>#</th>
                     <th>Estado</th>
                     <th>Creada</th>
+                    <th>Enviada</th>
                     <th>Observaciones</th>
+                    <th>Envío</th>
                     <th>Accesos</th>
                   </tr>
                 </thead>
                 <tbody>
                   {precotizaciones.map((p) => {
                     const abierta = accesosAbiertos === p.id_precotizacion
+                    const formEnvioAbierto = envioAbierto === p.id_precotizacion
+                    const enviando = enviandoId === p.id_precotizacion
                     return (
                       <Fragment key={p.id_precotizacion}>
                         <tr>
                           <td>{p.id_precotizacion}</td>
                           <td>
-                            <span className="badge badge--off">{p.estado}</span>
+                            <span
+                              className={
+                                p.estado === 'ENVIADA'
+                                  ? 'badge badge--ok'
+                                  : 'badge badge--off'
+                              }
+                            >
+                              {p.estado}
+                            </span>
                           </td>
                           <td>
                             {p.fecha_creacion
                               ? new Date(p.fecha_creacion).toLocaleString()
                               : '—'}
                           </td>
+                          <td>
+                            {p.fecha_envio
+                              ? new Date(p.fecha_envio).toLocaleString()
+                              : '—'}
+                          </td>
                           <td>{p.observaciones ?? '—'}</td>
+                          <td>
+                            {p.estado === 'BORRADOR' && (
+                              <button
+                                className="btn btn--ghost"
+                                type="button"
+                                onClick={() => toggleEnvio(p.id_precotizacion)}
+                                aria-expanded={formEnvioAbierto}
+                                disabled={enviando}
+                              >
+                                {formEnvioAbierto ? 'Cancelar' : 'Enviar al cliente'}
+                              </button>
+                            )}
+                            {p.estado === 'ENVIADA' && (
+                              <button
+                                className="btn btn--ghost"
+                                type="button"
+                                onClick={() => handleReenviar(p)}
+                                disabled={enviando}
+                              >
+                                {enviando ? 'Reenviando…' : 'Reenviar'}
+                              </button>
+                            )}
+                            {p.estado !== 'BORRADOR' && p.estado !== 'ENVIADA' && '—'}
+                          </td>
                           <td>
                             <button
                               className="btn btn--ghost"
@@ -570,9 +697,76 @@ export default function PortalComercialPage() {
                             </button>
                           </td>
                         </tr>
+                        {formEnvioAbierto && (
+                          <tr className="data-table__detalle">
+                            <td colSpan={7}>
+                              <form
+                                className="form-grid"
+                                onSubmit={(e) => handleEnviar(e, p.id_precotizacion)}
+                              >
+                                <label className="form-field">
+                                  <span className="form-field__label">
+                                    Correo del cliente
+                                  </span>
+                                  <input
+                                    className="form-field__input"
+                                    type="email"
+                                    required
+                                    value={correoEnvio}
+                                    onChange={(e) => setCorreoEnvio(e.target.value)}
+                                    disabled={enviando}
+                                    placeholder="cliente@empresa.com"
+                                  />
+                                </label>
+
+                                <label className="form-field form-field--inline">
+                                  <input
+                                    type="checkbox"
+                                    checked={confirmoEnvio}
+                                    onChange={(e) =>
+                                      setConfirmoEnvio(e.target.checked)
+                                    }
+                                    disabled={enviando}
+                                  />
+                                  <span className="form-field__label">
+                                    Confirmo que validé el levantamiento (HU-12).
+                                  </span>
+                                </label>
+
+                                {errorEnvio &&
+                                  errorEnvioId === p.id_precotizacion && (
+                                    <p className="form-error" role="alert">
+                                      {errorEnvio}
+                                    </p>
+                                  )}
+
+                                <div className="form-actions">
+                                  <button
+                                    className="btn"
+                                    type="submit"
+                                    disabled={enviando || !confirmoEnvio}
+                                  >
+                                    {enviando ? 'Enviando…' : 'Enviar al cliente'}
+                                  </button>
+                                </div>
+                              </form>
+                            </td>
+                          </tr>
+                        )}
+                        {p.estado === 'ENVIADA' &&
+                          errorEnvio &&
+                          errorEnvioId === p.id_precotizacion && (
+                            <tr className="data-table__detalle">
+                              <td colSpan={7}>
+                                <p className="form-error" role="alert">
+                                  {errorEnvio}
+                                </p>
+                              </td>
+                            </tr>
+                          )}
                         {abierta && (
                           <tr className="data-table__detalle">
-                            <td colSpan={5}>
+                            <td colSpan={7}>
                               {cargandoAccesos && (
                                 <p className="state-text">Cargando accesos…</p>
                               )}
