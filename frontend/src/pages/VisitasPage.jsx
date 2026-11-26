@@ -1,11 +1,17 @@
-/* Visitas (M3, R7).
+/* Visitas (M3, R7, RF-01).
  *
  * Una visita se asocia a empresa, sede, comercial y técnico, y organiza el
  * levantamiento. La pantalla tiene dos partes:
  *   1. Alta (solo COMERCIAL_MANSILLAS): elige empresa, sede y técnico, y
  *      programa la visita. El comercial es el usuario autenticado.
- *   2. Listado filtrado por la empresa elegida. TECNICO y ADMIN_CLIENTE entran
- *      en modo consulta (ven el listado, no el alta).
+ *   2. Listado filtrado por la empresa elegida. ADMIN_CLIENTE entra en modo
+ *      consulta (ve el listado por empresa, no el alta).
+ *
+ * TECNICO — "Mis visitas" (RF-01): se omite el paso de elegir empresa y se
+ * listan directamente sus visitas asignadas con `listVisitas()` sin filtro; el
+ * backend ya acota por `id_tecnico`. Estado vacío: "no tienes visitas
+ * asignadas". Para COMERCIAL_MANSILLAS / ADMIN_CLIENTE se mantiene el flujo por
+ * empresa.
  *
  * Empresas y visitas son recursos de otros devs: se consumen con mocks
  * conmutables (src/api). Los técnicos se piden a mi endpoint propio /usuarios
@@ -44,9 +50,12 @@ function formInicial() {
 export default function VisitasPage() {
   const { user, hasRole } = useAuth()
   const puedeCrear = hasRole([ROLES.COMERCIAL_MANSILLAS])
+  // RF-01: el técnico no elige empresa; ve directamente sus visitas asignadas.
+  const esTecnico = user?.rol === ROLES.TECNICO
 
   const [empresas, setEmpresas] = useState([])
-  const [cargandoEmpresas, setCargandoEmpresas] = useState(true)
+  // El técnico no carga empresas (RF-01), así que arranca sin estado de carga.
+  const [cargandoEmpresas, setCargandoEmpresas] = useState(!esTecnico)
   const [errorEmpresas, setErrorEmpresas] = useState('')
   const [empresaSel, setEmpresaSel] = useState('')
 
@@ -67,8 +76,10 @@ export default function VisitasPage() {
   const [accionEnCurso, setAccionEnCurso] = useState(null)
   const [errorAccion, setErrorAccion] = useState('')
 
-  // Empresas para el selector (mock conmutable).
+  // Empresas para el selector (mock conmutable). El técnico no usa el selector
+  // de empresa (RF-01), así que ni se cargan.
   useEffect(() => {
+    if (esTecnico) return
     let vigente = true
     listEmpresas()
       .then((data) => {
@@ -83,7 +94,7 @@ export default function VisitasPage() {
     return () => {
       vigente = false
     }
-  }, [])
+  }, [esTecnico])
 
   // Técnicos para asignar (endpoint propio /usuarios). Solo tiene sentido
   // cargarlos para quien puede crear visitas; si falla, se usa un input de id.
@@ -104,16 +115,20 @@ export default function VisitasPage() {
   }, [puedeCrear])
 
   const idEmpresaSel = empresaSel ? Number(empresaSel) : null
+  // El listado se muestra cuando hay una empresa elegida o cuando es técnico
+  // (que ve sus visitas sin elegir empresa, RF-01).
+  const mostrarListado = esTecnico || Boolean(idEmpresaSel)
 
   async function cargarVisitas() {
-    if (!idEmpresaSel) {
+    if (!mostrarListado) {
       setVisitas([])
       return
     }
     setCargandoVisitas(true)
     setErrorVisitas('')
     try {
-      const data = await listVisitas(idEmpresaSel)
+      // El técnico pide sin filtro de empresa; el backend ya acota por técnico.
+      const data = await listVisitas(esTecnico ? undefined : idEmpresaSel)
       setVisitas(data)
     } catch {
       setErrorVisitas('No se pudieron cargar las visitas.')
@@ -122,19 +137,20 @@ export default function VisitasPage() {
     }
   }
 
-  // Recarga el listado al cambiar de empresa. Sin empresa no se dispara ni se
-  // muestra nada (la sección del listado está acotada por `idEmpresaSel`), así
-  // que el estado anterior no llega a verse. Las llamadas a setState van dentro
-  // del flujo asíncrono para no disparar renders en cascada desde el efecto.
+  // Recarga el listado al cambiar de empresa (o al montar, si es técnico). Sin
+  // empresa y sin ser técnico no se dispara ni se muestra nada (la sección del
+  // listado está acotada por `mostrarListado`), así que el estado anterior no
+  // llega a verse. Las llamadas a setState van dentro del flujo asíncrono para
+  // no disparar renders en cascada desde el efecto.
   useEffect(() => {
-    if (!idEmpresaSel) return
+    if (!mostrarListado) return
     let vigente = true
     Promise.resolve()
       .then(() => {
         if (!vigente) return
         setCargandoVisitas(true)
         setErrorVisitas('')
-        return listVisitas(idEmpresaSel)
+        return listVisitas(esTecnico ? undefined : idEmpresaSel)
       })
       .then((data) => {
         if (vigente && data) setVisitas(data)
@@ -148,7 +164,7 @@ export default function VisitasPage() {
     return () => {
       vigente = false
     }
-  }, [idEmpresaSel])
+  }, [mostrarListado, esTecnico, idEmpresaSel])
 
   function actualizarCampo(campo, valor) {
     setForm((prev) => ({ ...prev, [campo]: valor }))
@@ -246,21 +262,27 @@ export default function VisitasPage() {
   return (
     <div className="page-stack">
       <section className="card">
-        <h1>Visitas</h1>
-        <p className="state-text">
-          Elige una empresa para ver sus visitas
-          {puedeCrear ? ' o programar una nueva.' : '.'}
-        </p>
+        <h1>{esTecnico ? 'Mis visitas' : 'Visitas'}</h1>
+        {esTecnico ? (
+          <p className="state-text">Estas son las visitas que tienes asignadas.</p>
+        ) : (
+          <p className="state-text">
+            Elige una empresa para ver sus visitas
+            {puedeCrear ? ' o programar una nueva.' : '.'}
+          </p>
+        )}
 
-        {cargandoEmpresas && <p className="state-text">Cargando empresas…</p>}
+        {!esTecnico && cargandoEmpresas && (
+          <p className="state-text">Cargando empresas…</p>
+        )}
 
-        {!cargandoEmpresas && errorEmpresas && (
+        {!esTecnico && !cargandoEmpresas && errorEmpresas && (
           <p className="form-error" role="alert">
             {errorEmpresas}
           </p>
         )}
 
-        {!cargandoEmpresas && !errorEmpresas && (
+        {!esTecnico && !cargandoEmpresas && !errorEmpresas && (
           <label className="form-field" style={{ maxWidth: '22rem', marginTop: '0.75rem' }}>
             <span className="form-field__label">Empresa</span>
             <select
@@ -389,9 +411,9 @@ export default function VisitasPage() {
         </section>
       )}
 
-      {idEmpresaSel && (
+      {mostrarListado && (
         <section className="card">
-          <h2>Visitas de la empresa</h2>
+          <h2>{esTecnico ? 'Mis visitas asignadas' : 'Visitas de la empresa'}</h2>
 
           {cargandoVisitas && <p className="state-text">Cargando visitas…</p>}
 
@@ -405,7 +427,11 @@ export default function VisitasPage() {
           )}
 
           {!cargandoVisitas && !errorVisitas && visitas.length === 0 && (
-            <p className="state-text">Esta empresa aún no tiene visitas.</p>
+            <p className="state-text">
+              {esTecnico
+                ? 'No tienes visitas asignadas.'
+                : 'Esta empresa aún no tiene visitas.'}
+            </p>
           )}
 
           {!cargandoVisitas && !errorVisitas && visitas.length > 0 && (

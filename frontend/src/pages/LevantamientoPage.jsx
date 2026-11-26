@@ -1,9 +1,11 @@
 /* Levantamiento móvil (M4, HU-28, R8).
  *
  * El técnico, en sitio y desde el móvil, levanta las sillas de una visita:
- *   1. Elige empresa y visita (recursos de otros devs, mockeables). El filtro
- *      por empresa solo acota la vista; el aislamiento real lo impone el
- *      backend según el usuario (R4).
+ *   1. Elige la visita. Para un TECNICO (RF-01) se omite el paso de empresa y
+ *      se listan directamente sus visitas asignadas (`listVisitas()` sin filtro;
+ *      el backend ya acota por `id_tecnico`). Para otros roles se mantiene el
+ *      flujo empresa → visita. El filtro por empresa solo acota la vista; el
+ *      aislamiento real lo impone el backend según el usuario (R4).
  *   2. Registra una silla con sus datos (empleado, sede, departamento, cargo,
  *      serial) y el estado de los 5 componentes; el `codigo_qr` lo genera la BD.
  *   3. Sube fotos de la silla.
@@ -26,6 +28,8 @@ import {
 } from '../api/sillas'
 import { descargarQrPdf } from '../api/qr'
 import { descargarBlob } from '../utils/descargarBlob'
+import { ROLES } from '../auth/roles'
+import { useAuth } from '../context/auth-context'
 
 // Mensaje legible por código HTTP al bajar el PDF de QR (RF-05). El cuerpo crudo
 // del backend nunca se muestra al usuario.
@@ -65,8 +69,13 @@ function formInicial() {
 }
 
 export default function LevantamientoPage() {
+  const { user } = useAuth()
+  // RF-01: el técnico no elige empresa; ve directamente sus visitas asignadas.
+  const esTecnico = user?.rol === ROLES.TECNICO
+
   const [empresas, setEmpresas] = useState([])
-  const [cargandoEmpresas, setCargandoEmpresas] = useState(true)
+  // El técnico no carga empresas (RF-01), así que arranca sin estado de carga.
+  const [cargandoEmpresas, setCargandoEmpresas] = useState(!esTecnico)
   const [errorEmpresas, setErrorEmpresas] = useState('')
   const [empresaSel, setEmpresaSel] = useState('')
 
@@ -90,8 +99,10 @@ export default function LevantamientoPage() {
   const idEmpresaSel = empresaSel ? Number(empresaSel) : null
   const idVisitaSel = visitaSel ? Number(visitaSel) : null
 
-  // Empresas para el selector (mock conmutable).
+  // Empresas para el selector (mock conmutable). El técnico no usa el selector
+  // de empresa (RF-01), así que ni se cargan.
   useEffect(() => {
+    if (esTecnico) return
     let vigente = true
     listEmpresas()
       .then((data) => {
@@ -106,11 +117,13 @@ export default function LevantamientoPage() {
     return () => {
       vigente = false
     }
-  }, [])
+  }, [esTecnico])
 
-  // Al cambiar de empresa, se recargan sus visitas y se limpia la selección.
-  // Las llamadas a setState van dentro del flujo asíncrono (como en VisitasPage)
-  // para no disparar renders en cascada desde el efecto.
+  // El técnico carga sus visitas al montar (RF-01, sin empresa); los demás al
+  // elegir empresa. En ambos casos se limpia la selección de visita antes de
+  // recargar. Las llamadas a setState van dentro del flujo asíncrono (como en
+  // VisitasPage) para no disparar renders en cascada desde el efecto.
+  const cargarVisitasTecnico = esTecnico
   useEffect(() => {
     let vigente = true
     Promise.resolve()
@@ -118,10 +131,10 @@ export default function LevantamientoPage() {
         if (!vigente) return null
         setVisitaSel('')
         setVisitas([])
-        if (!idEmpresaSel) return null
+        if (!cargarVisitasTecnico && !idEmpresaSel) return null
         setCargandoVisitas(true)
         setErrorVisitas('')
-        return listVisitas(idEmpresaSel)
+        return listVisitas(cargarVisitasTecnico ? undefined : idEmpresaSel)
       })
       .then((data) => {
         if (vigente && data) setVisitas(data)
@@ -130,12 +143,14 @@ export default function LevantamientoPage() {
         if (vigente) setErrorVisitas('No se pudieron cargar las visitas.')
       })
       .finally(() => {
-        if (vigente && idEmpresaSel) setCargandoVisitas(false)
+        if (vigente && (cargarVisitasTecnico || idEmpresaSel)) {
+          setCargandoVisitas(false)
+        }
       })
     return () => {
       vigente = false
     }
-  }, [idEmpresaSel])
+  }, [cargarVisitasTecnico, idEmpresaSel])
 
   // Al elegir visita, se cargan sus sillas y se reinicia el formulario.
   useEffect(() => {
@@ -287,37 +302,43 @@ export default function LevantamientoPage() {
       <section className="card">
         <h1>Levantamiento en sitio</h1>
         <p className="state-text">
-          Elige la empresa y la visita para registrar sus sillas.
+          {esTecnico
+            ? 'Elige una de tus visitas asignadas para registrar sus sillas.'
+            : 'Elige la empresa y la visita para registrar sus sillas.'}
         </p>
 
-        {cargandoEmpresas && <p className="state-text">Cargando empresas…</p>}
+        {!esTecnico && cargandoEmpresas && (
+          <p className="state-text">Cargando empresas…</p>
+        )}
 
-        {!cargandoEmpresas && errorEmpresas && (
+        {!esTecnico && !cargandoEmpresas && errorEmpresas && (
           <p className="form-error" role="alert">
             {errorEmpresas}
           </p>
         )}
 
-        {!cargandoEmpresas && !errorEmpresas && (
+        {(esTecnico || (!cargandoEmpresas && !errorEmpresas)) && (
           <div className="levantamiento__selectores">
-            <label className="form-field">
-              <span className="form-field__label">Empresa</span>
-              <select
-                className="form-field__input"
-                value={empresaSel}
-                onChange={(e) => setEmpresaSel(e.target.value)}
-                disabled={empresas.length === 0}
-              >
-                <option value="">— Seleccionar —</option>
-                {empresas.map((e) => (
-                  <option key={e.id_empresa} value={e.id_empresa}>
-                    {e.nombre}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {!esTecnico && (
+              <label className="form-field">
+                <span className="form-field__label">Empresa</span>
+                <select
+                  className="form-field__input"
+                  value={empresaSel}
+                  onChange={(e) => setEmpresaSel(e.target.value)}
+                  disabled={empresas.length === 0}
+                >
+                  <option value="">— Seleccionar —</option>
+                  {empresas.map((e) => (
+                    <option key={e.id_empresa} value={e.id_empresa}>
+                      {e.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
 
-            {idEmpresaSel && (
+            {(esTecnico || idEmpresaSel) && (
               <label className="form-field">
                 <span className="form-field__label">Visita</span>
                 {cargandoVisitas ? (
@@ -335,7 +356,9 @@ export default function LevantamientoPage() {
                   >
                     <option value="">
                       {visitas.length === 0
-                        ? '— Sin visitas —'
+                        ? esTecnico
+                          ? '— No tienes visitas asignadas —'
+                          : '— Sin visitas —'
                         : '— Seleccionar —'}
                     </option>
                     {visitas.map((v) => (
