@@ -716,3 +716,18 @@
   justify-content: space-between;
   gap: 0.75rem;
 }
+
+/* Encabezado de tarjeta con un título y una acción a la derecha (p. ej. el
+   botón "Descargar QR (PDF)" sobre la lista de sillas levantadas). Se apila en
+   móvil para no apretujar el botón contra el título. */
+.card__encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.card__encabezado h2 {
+  margin: 0;
+}

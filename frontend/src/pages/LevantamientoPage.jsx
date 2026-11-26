@@ -24,6 +24,17 @@ import {
   listSillas,
   uploadFotoSilla,
 } from '../api/sillas'
+import { descargarQrPdf } from '../api/qr'
+import { descargarBlob } from '../utils/descargarBlob'
+
+// Mensaje legible por código HTTP al bajar el PDF de QR (RF-05). El cuerpo crudo
+// del backend nunca se muestra al usuario.
+function mensajeErrorQrPdf(status) {
+  if (status === 400) return 'Selecciona al menos una silla.'
+  if (status === 403) return 'No tienes permiso para estas sillas.'
+  if (status === 404) return 'Alguna silla no existe.'
+  return 'No se pudo generar el PDF de QR. Inténtalo de nuevo.'
+}
 const ESTADO_COMPONENTE_LABEL = {
   BUENO: 'Bueno',
   MANTENIMIENTO: 'Mantenimiento',
@@ -67,6 +78,8 @@ export default function LevantamientoPage() {
   const [sillas, setSillas] = useState([])
   const [cargandoSillas, setCargandoSillas] = useState(false)
   const [errorSillas, setErrorSillas] = useState('')
+  const [descargando, setDescargando] = useState(false)
+  const [errorDescarga, setErrorDescarga] = useState('')
 
   const [form, setForm] = useState(formInicial)
   const [fotos, setFotos] = useState([])
@@ -164,6 +177,21 @@ export default function LevantamientoPage() {
       setErrorSillas('No se pudieron cargar las sillas.')
     } finally {
       setCargandoSillas(false)
+    }
+  }
+
+  // Baja el PDF de QR de las sillas levantadas (RF-05). `descargarQrPdf`
+  // propaga el error HTTP tal cual; aquí se mapea a un mensaje legible.
+  async function handleDescargarQr() {
+    setErrorDescarga('')
+    setDescargando(true)
+    try {
+      const blob = await descargarQrPdf(sillas.map((s) => s.id_silla))
+      descargarBlob(blob, 'qr_sillas.pdf')
+    } catch (err) {
+      setErrorDescarga(mensajeErrorQrPdf(err.response?.status))
+    } finally {
+      setDescargando(false)
     }
   }
 
@@ -501,7 +529,23 @@ export default function LevantamientoPage() {
 
       {idVisitaSel && (
         <section className="card">
-          <h2>Sillas levantadas</h2>
+          <div className="card__encabezado">
+            <h2>Sillas levantadas</h2>
+            <button
+              className="btn btn--ghost"
+              type="button"
+              onClick={handleDescargarQr}
+              disabled={descargando || sillas.length === 0}
+            >
+              {descargando ? 'Generando PDF…' : 'Descargar QR (PDF)'}
+            </button>
+          </div>
+
+          {errorDescarga && (
+            <p className="form-error" role="alert">
+              {errorDescarga}
+            </p>
+          )}
 
           {cargandoSillas && <p className="state-text">Cargando sillas…</p>}
 

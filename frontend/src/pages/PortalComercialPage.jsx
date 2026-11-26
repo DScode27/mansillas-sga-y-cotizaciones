@@ -21,6 +21,26 @@ import {
   createPrecotizacion,
   listAccesos,
 } from '../api/precotizaciones'
+import { descargarQrPdf } from '../api/qr'
+import { exportarInventario } from '../api/inventario'
+import { descargarBlob } from '../utils/descargarBlob'
+
+// Mensaje legible por código HTTP al bajar el PDF de QR (RF-05). El cuerpo crudo
+// del backend nunca se muestra al usuario.
+function mensajeErrorQrPdf(status) {
+  if (status === 400) return 'Selecciona al menos una silla.'
+  if (status === 403) return 'No tienes permiso para estas sillas.'
+  if (status === 404) return 'Alguna silla no existe.'
+  return 'No se pudo generar el PDF de QR. Inténtalo de nuevo.'
+}
+
+// Mensaje legible por código HTTP al exportar el inventario (RF-11). El backend
+// acota el alcance por rol; aquí solo se mapean los errores a un texto claro.
+function mensajeErrorInventario(status) {
+  if (status === 400) return 'Formato de exportación no admitido.'
+  return 'No se pudo exportar el inventario. Inténtalo de nuevo.'
+}
+
 const COMPONENTE_NOMBRE = new Map(
   COMPONENTES.map((c) => [c.id_componente, c.nombre]),
 )
@@ -46,10 +66,16 @@ export default function PortalComercialPage() {
   const [sillas, setSillas] = useState([])
   const [cargandoSillas, setCargandoSillas] = useState(false)
   const [errorSillas, setErrorSillas] = useState('')
+  const [descargando, setDescargando] = useState(false)
+  const [errorDescarga, setErrorDescarga] = useState('')
 
   const [precotizaciones, setPrecotizaciones] = useState([])
   const [cargandoPrecot, setCargandoPrecot] = useState(false)
   const [errorPrecot, setErrorPrecot] = useState('')
+
+  // Exportación de inventario (RF-11): formato en curso ('' si ninguno) y error.
+  const [exportando, setExportando] = useState('')
+  const [errorInventario, setErrorInventario] = useState('')
 
   const [observaciones, setObservaciones] = useState('')
   const [creando, setCreando] = useState(false)
@@ -164,6 +190,37 @@ export default function PortalComercialPage() {
       setErrorSillas('No se pudieron cargar las sillas.')
     } finally {
       setCargandoSillas(false)
+    }
+  }
+
+  // Baja el PDF de QR de las sillas levantadas (RF-05). `descargarQrPdf`
+  // propaga el error HTTP tal cual; aquí se mapea a un mensaje legible.
+  async function handleDescargarQr() {
+    setErrorDescarga('')
+    setDescargando(true)
+    try {
+      const blob = await descargarQrPdf(sillas.map((s) => s.id_silla))
+      descargarBlob(blob, 'qr_sillas.pdf')
+    } catch (err) {
+      setErrorDescarga(mensajeErrorQrPdf(err.response?.status))
+    } finally {
+      setDescargando(false)
+    }
+  }
+
+  // Exporta el inventario a CSV o XLSX (RF-11). `exportarInventario` devuelve el
+  // Blob y propaga el error HTTP tal cual; `descargarBlob` baja el archivo. El
+  // alcance de los datos lo limita el backend por rol; aquí no se filtra nada.
+  async function handleExportarInventario(formato) {
+    setErrorInventario('')
+    setExportando(formato)
+    try {
+      const blob = await exportarInventario(formato)
+      descargarBlob(blob, `inventario.${formato}`)
+    } catch (err) {
+      setErrorInventario(mensajeErrorInventario(err.response?.status))
+    } finally {
+      setExportando('')
     }
   }
 
@@ -313,9 +370,58 @@ export default function PortalComercialPage() {
         )}
       </section>
 
+      <section className="card">
+        <h2>Exportar inventario</h2>
+        <p className="state-text">
+          Descarga el inventario levantado para analizarlo fuera del sistema. El
+          alcance de los datos depende de tu rol.
+        </p>
+
+        {errorInventario && (
+          <p className="form-error" role="alert">
+            {errorInventario}
+          </p>
+        )}
+
+        <div className="form-actions">
+          <button
+            className="btn btn--ghost"
+            type="button"
+            onClick={() => handleExportarInventario('csv')}
+            disabled={exportando !== ''}
+          >
+            {exportando === 'csv' ? 'Exportando…' : 'Exportar CSV'}
+          </button>
+          <button
+            className="btn btn--ghost"
+            type="button"
+            onClick={() => handleExportarInventario('xlsx')}
+            disabled={exportando !== ''}
+          >
+            {exportando === 'xlsx' ? 'Exportando…' : 'Exportar XLSX'}
+          </button>
+        </div>
+      </section>
+
       {idVisitaSel && (
         <section className="card">
-          <h2>Sillas levantadas</h2>
+          <div className="card__encabezado">
+            <h2>Sillas levantadas</h2>
+            <button
+              className="btn btn--ghost"
+              type="button"
+              onClick={handleDescargarQr}
+              disabled={descargando || sillas.length === 0}
+            >
+              {descargando ? 'Generando PDF…' : 'Descargar QR (PDF)'}
+            </button>
+          </div>
+
+          {errorDescarga && (
+            <p className="form-error" role="alert">
+              {errorDescarga}
+            </p>
+          )}
 
           {cargandoSillas && <p className="state-text">Cargando sillas…</p>}
 

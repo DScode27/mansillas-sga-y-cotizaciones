@@ -31,4 +31,5 @@ export const USE_MOCK = {
   precotizaciones: false,
   qrPublico: false,
   qrPdf: false,
+  inventario: false,
 }
