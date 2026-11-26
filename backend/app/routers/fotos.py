@@ -107,8 +107,19 @@ def _cargar_silla(db: Session, id_silla: int) -> Silla:
 
 
 def _autorizar_lectura_silla(db: Session, user: CurrentUser, silla: Silla) -> None:
-    """Same rule as reading a chair: commercial any, technician own visit."""
+    """Who may read a chair's photographs.
+
+    Commercial: any chair. Technician: only chairs of their own visit.
+    ADMIN_CLIENTE: only chairs of their own empresa (read-only portal, R4), so
+    the client can see the photographs of its surveyed chairs.
+    """
     if user.rol == "COMERCIAL_MANSILLAS":
+        return
+    if user.rol == "ADMIN_CLIENTE":
+        if user.empresa_id is None or silla.id_empresa != user.empresa_id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "No autorizado para esta silla"
+            )
         return
     if user.rol != "TECNICO":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol no autorizado")

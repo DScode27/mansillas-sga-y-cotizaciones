@@ -13,8 +13,9 @@ export const USE_MOCK = {
   // Estos recursos NO tienen endpoint todavía en el backend (los exponen otros
   // devs). Mientras no existan su CRUD, siguen en mock: pasarlos a `false`
   // haría fallar las pantallas con 404/Network Error.
-  //   - portalCliente: no hay router `/portal-cliente/*`.
-  portalCliente: true,
+  //   - portalCliente: router real `/portal-cliente/*` (GET sillas y
+  //     precotizaciones, acotado a la empresa del ADMIN_CLIENTE autenticado).
+  portalCliente: false,
 
   // Estos SÍ tienen endpoint real en el backend; consumen directo.
   //   - empresas: router `/empresas` real (GET/POST) tras el módulo de

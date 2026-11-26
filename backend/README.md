@@ -36,6 +36,36 @@ Copia `.env.example` a `.env` y completa los valores:
 
 Ningún secreto se guarda en el código: todo se lee de variables de entorno.
 
+### Envío de correo (SMTP)
+
+El sistema envía correos en tres flujos: el enlace de la precotización (HU-13),
+el código OTP para aceptar la propuesta (HU-15) y el código OTP para enviar un
+ticket desde el QR (HU-24). El transporte es SMTP estándar (`smtplib` + TLS);
+no hace falta instalar nada. Sin configurar SMTP la app arranca igual: el envío
+queda deshabilitado con un error controlado (503) y, en desarrollo, los códigos
+OTP se escriben al log.
+
+Para que el correo sea **funcional y gratis** (proyecto universitario), la
+opción más simple es **Gmail con contraseña de aplicación**:
+
+1. En tu cuenta de Gmail activa la **Verificación en 2 pasos**.
+2. Ve a <https://myaccount.google.com/apppasswords> y genera una **contraseña
+   de aplicación** de 16 caracteres (no cuesta nada ni pide tarjeta).
+3. En `backend/.env` pon:
+
+   ```env
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_USER=tucuenta@gmail.com
+   SMTP_PASSWORD=la-contraseña-de-aplicacion-de-16-caracteres
+   SMTP_FROM=tucuenta@gmail.com
+   SMTP_TLS=true
+   ```
+
+Usa la contraseña de aplicación como `SMTP_PASSWORD`, **nunca** tu contraseña
+normal de Gmail. Alternativa sin tarjeta: **Brevo** (300 correos/día gratis);
+ver los valores comentados en `backend/.env.example`.
+
 ## Autenticación
 
 `POST /auth/login` con `{"correo": ..., "password": ...}` devuelve un JWT y los datos

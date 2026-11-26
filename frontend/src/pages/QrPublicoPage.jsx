@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import logoMansillas from '../assets/logoMansillas.jpg'
+import Lightbox from '../components/Lightbox'
 import {
   getSillaPublica,
   getFotoPublicaUrl,
@@ -298,6 +299,8 @@ export default function QrPublicoPage() {
   // desmontar o al cambiar de token, para no filtrar memoria. Si la carga de
   // fotos falla (o no hay), la ficha se muestra igual sin sección de fotos.
   const [fotos, setFotos] = useState([])
+  // Foto abierta en el lightbox (su url) o null.
+  const [fotoAmpliada, setFotoAmpliada] = useState(null)
 
   // Las llamadas a setState van dentro del flujo asíncrono (como en las demás
   // pantallas) para no disparar renders en cascada desde el propio efecto.
@@ -452,11 +455,18 @@ export default function QrPublicoPage() {
                 <ul className="qr-publico__fotos-lista">
                   {fotos.map((f) => (
                     <li key={f.id} className="qr-publico__foto">
-                      <img
-                        src={f.url}
-                        alt={`Foto ${f.id} de la silla ${silla.codigo_qr}`}
-                        className="qr-publico__foto-img"
-                      />
+                      <button
+                        type="button"
+                        className="foto-thumb-btn"
+                        onClick={() => setFotoAmpliada(f.url)}
+                        aria-label={`Ampliar foto ${f.id} de la silla ${silla.codigo_qr}`}
+                      >
+                        <img
+                          src={f.url}
+                          alt={`Foto ${f.id} de la silla ${silla.codigo_qr}`}
+                          className="qr-publico__foto-img"
+                        />
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -468,6 +478,14 @@ export default function QrPublicoPage() {
               <AvisoSinTicket permisoQr={silla.permiso_qr} />
             )}
           </article>
+        )}
+
+        {fotoAmpliada && (
+          <Lightbox
+            url={fotoAmpliada}
+            alt={`Foto de la silla ${silla?.codigo_qr ?? ''}`}
+            onClose={() => setFotoAmpliada(null)}
+          />
         )}
       </section>
     </div>

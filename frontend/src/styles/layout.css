@@ -837,3 +837,108 @@
 .card__encabezado h2 {
   margin: 0;
 }
+
+/* Botón contenedor de una miniatura (clic para ampliar en el lightbox). No
+   añade estilo de botón: deja ver la imagen y solo marca el cursor. */
+.foto-thumb-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+  display: inline-flex;
+  border-radius: var(--radio-sm);
+}
+
+.foto-thumb-btn:focus-visible {
+  outline: 2px solid var(--color-primario, #2563eb);
+  outline-offset: 2px;
+}
+
+/* Acciones alineadas en el encabezado de una tarjeta (p. ej. Descargar QR +
+   Terminar levantamiento). */
+.card__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Lightbox: overlay a pantalla completa con la foto centrada. */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.78);
+}
+
+.lightbox__contenido {
+  position: relative;
+  max-width: 92vw;
+  max-height: 92vh;
+}
+
+.lightbox__img {
+  display: block;
+  max-width: 92vw;
+  max-height: 92vh;
+  object-fit: contain;
+  border-radius: var(--radio-sm);
+  background: #fff;
+}
+
+.lightbox__cerrar {
+  position: absolute;
+  top: -0.6rem;
+  right: -0.6rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  color: #111;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.lightbox__cerrar:focus-visible {
+  outline: 2px solid var(--color-primario, #2563eb);
+  outline-offset: 2px;
+}
+
+/* Campo de contraseña con botón mostrar/ocultar integrado. */
+.password-field {
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.password-field .form-field__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.password-field__toggle {
+  flex: 0 0 auto;
+  padding: 0 0.7rem;
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-sm);
+  background: var(--color-sobre-primario, #fff);
+  color: var(--color-texto-suave);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.password-field__toggle:focus-visible {
+  outline: 2px solid var(--color-primario, #2563eb);
+  outline-offset: 2px;
+}
+
+.password-field__toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}

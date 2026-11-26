@@ -130,6 +130,21 @@ export async function updateVisita(idVisita, cambios) {
   return data
 }
 
+/* Finaliza una visita como técnico dueño (PUT /visitas/{id_visita}/finalizar).
+ *
+ * Cierra el levantamiento desde la pantalla del técnico: deja la visita en
+ * estado FINALIZADA. El backend solo lo permite al TECNICO asignado (403 en
+ * otro caso) y devuelve la visita actualizada. En mock actualiza el store. */
+export async function finalizarVisita(idVisita) {
+  if (USE_MOCK.visitas) {
+    const visita = buscarVisitaMock(idVisita)
+    visita.estado = 'FINALIZADA'
+    return { ...visita }
+  }
+  const { data } = await apiClient.put(`/visitas/${idVisita}/finalizar`)
+  return data
+}
+
 /* Elimina una visita (DELETE /visitas/{id_visita}).
  *
  * El backend responde 409 si la visita tiene sillas registradas; en mock se

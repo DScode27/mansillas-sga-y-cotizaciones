@@ -12,6 +12,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { getFotoSillaUrl } from '../api/sillas'
+import Lightbox from './Lightbox'
 
 const ESTADO_COMPONENTE_LABEL = {
   BUENO: 'Bueno',
@@ -32,6 +33,8 @@ export default function SillaCard({ silla, extra = null }) {
   const [fotos, setFotos] = useState([])
   const [cargandoFotos, setCargandoFotos] = useState(false)
   const [errorFotos, setErrorFotos] = useState('')
+  // Foto abierta en el lightbox (su url) o null.
+  const [fotoAmpliada, setFotoAmpliada] = useState(null)
   // Object URLs vivos, para revocarlos al colapsar o desmontar.
   const urlsRef = useRef([])
 
@@ -52,6 +55,7 @@ export default function SillaCard({ silla, extra = null }) {
     if (expandida) {
       setExpandida(false)
       setFotos([])
+      setFotoAmpliada(null)
       revocarUrls()
       return
     }
@@ -132,16 +136,31 @@ export default function SillaCard({ silla, extra = null }) {
             <ul className="sillas-lista__fotos-grid">
               {fotos.map((f) => (
                 <li key={f.id}>
-                  <img
-                    src={f.url}
-                    alt={`Foto ${f.id} de ${silla.codigo_qr}`}
-                    className="sillas-lista__foto-thumb"
-                  />
+                  <button
+                    type="button"
+                    className="foto-thumb-btn"
+                    onClick={() => setFotoAmpliada(f.url)}
+                    aria-label={`Ampliar foto ${f.id} de ${silla.codigo_qr}`}
+                  >
+                    <img
+                      src={f.url}
+                      alt={`Foto ${f.id} de ${silla.codigo_qr}`}
+                      className="sillas-lista__foto-thumb"
+                    />
+                  </button>
                 </li>
               ))}
             </ul>
           )}
         </div>
+      )}
+
+      {fotoAmpliada && (
+        <Lightbox
+          url={fotoAmpliada}
+          alt={`Foto de ${silla.codigo_qr}`}
+          onClose={() => setFotoAmpliada(null)}
+        />
       )}
     </li>
   )

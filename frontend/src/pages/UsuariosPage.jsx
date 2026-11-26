@@ -10,6 +10,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { asignarRol, createUsuario, listUsuarios } from '../api/usuarios'
 import { listEmpresas } from '../api/empresas'
+import PasswordField from '../components/PasswordField'
 import { ROLES } from '../auth/roles'
 import { construirCambioRol, rolEsDeCliente } from './usuariosRol'
 
@@ -228,9 +229,7 @@ export default function UsuariosPage() {
 
           <label className="form-field">
             <span className="form-field__label">Contraseña</span>
-            <input
-              className="form-field__input"
-              type="password"
+            <PasswordField
               autoComplete="new-password"
               minLength={6}
               value={form.password}

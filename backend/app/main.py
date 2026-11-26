@@ -20,6 +20,7 @@ from app.routers import (
     empresas,
     fotos,
     inventario,
+    portal_cliente,
     precotizaciones,
     qr,
     sedes,
@@ -53,6 +54,7 @@ app.include_router(qr.router)
 app.include_router(accesos.router)
 app.include_router(carga_excel.router)
 app.include_router(inventario.router)
+app.include_router(portal_cliente.router)
 app.include_router(empresas.router)
 app.include_router(sedes.router)
 app.include_router(departamentos.router)

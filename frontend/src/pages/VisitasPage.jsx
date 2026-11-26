@@ -53,10 +53,16 @@ export default function VisitasPage() {
   const puedeCrear = hasRole([ROLES.COMERCIAL_MANSILLAS])
   // RF-01: el técnico no elige empresa; ve directamente sus visitas asignadas.
   const esTecnico = user?.rol === ROLES.TECNICO
+  // El admin cliente tampoco elige empresa: solo tiene la suya (R4). Se usa su
+  // `id_empresa` directamente, sin desplegable.
+  const esAdminCliente = user?.rol === ROLES.ADMIN_CLIENTE
+  // Roles que NO usan el selector de empresa (operan sobre una empresa fija).
+  const sinSelectorEmpresa = esTecnico || esAdminCliente
 
   const [empresas, setEmpresas] = useState([])
-  // El técnico no carga empresas (RF-01), así que arranca sin estado de carga.
-  const [cargandoEmpresas, setCargandoEmpresas] = useState(!esTecnico)
+  // Ni el técnico ni el admin cliente cargan empresas (operan sobre una empresa
+  // fija), así que arrancan sin estado de carga.
+  const [cargandoEmpresas, setCargandoEmpresas] = useState(!sinSelectorEmpresa)
   const [errorEmpresas, setErrorEmpresas] = useState('')
   const [empresaSel, setEmpresaSel] = useState('')
 
@@ -86,7 +92,7 @@ export default function VisitasPage() {
   // Empresas para el selector (mock conmutable). El técnico no usa el selector
   // de empresa (RF-01), así que ni se cargan.
   useEffect(() => {
-    if (esTecnico) return
+    if (sinSelectorEmpresa) return
     let vigente = true
     listEmpresas()
       .then((data) => {
@@ -101,7 +107,7 @@ export default function VisitasPage() {
     return () => {
       vigente = false
     }
-  }, [esTecnico])
+  }, [sinSelectorEmpresa])
 
   // Técnicos para asignar (endpoint propio /usuarios). Solo tiene sentido
   // cargarlos para quien puede crear visitas; si falla, se usa un input de id.
@@ -121,9 +127,14 @@ export default function VisitasPage() {
     }
   }, [puedeCrear])
 
-  const idEmpresaSel = empresaSel ? Number(empresaSel) : null
-  // El listado se muestra cuando hay una empresa elegida o cuando es técnico
-  // (que ve sus visitas sin elegir empresa, RF-01).
+  // El admin cliente usa su propia empresa; el resto, la del selector.
+  const idEmpresaSel = esAdminCliente
+    ? (user?.id_empresa ?? null)
+    : empresaSel
+      ? Number(empresaSel)
+      : null
+  // El listado se muestra cuando hay una empresa (elegida o fija) o cuando es
+  // técnico (que ve sus visitas sin elegir empresa, RF-01).
   const mostrarListado = esTecnico || Boolean(idEmpresaSel)
 
   // Sedes de la empresa elegida para el selector por nombre del alta. Solo se
@@ -307,6 +318,8 @@ export default function VisitasPage() {
         <h1>{esTecnico ? 'Mis visitas' : 'Visitas'}</h1>
         {esTecnico ? (
           <p className="state-text">Estas son las visitas que tienes asignadas.</p>
+        ) : esAdminCliente ? (
+          <p className="state-text">Estas son las visitas de tu empresa.</p>
         ) : (
           <p className="state-text">
             Elige una empresa para ver sus visitas
@@ -314,17 +327,17 @@ export default function VisitasPage() {
           </p>
         )}
 
-        {!esTecnico && cargandoEmpresas && (
+        {!sinSelectorEmpresa && cargandoEmpresas && (
           <p className="state-text">Cargando empresas…</p>
         )}
 
-        {!esTecnico && !cargandoEmpresas && errorEmpresas && (
+        {!sinSelectorEmpresa && !cargandoEmpresas && errorEmpresas && (
           <p className="form-error" role="alert">
             {errorEmpresas}
           </p>
         )}
 
-        {!esTecnico && !cargandoEmpresas && !errorEmpresas && (
+        {!sinSelectorEmpresa && !cargandoEmpresas && !errorEmpresas && (
           <label className="form-field" style={{ maxWidth: '22rem', marginTop: '0.75rem' }}>
             <span className="form-field__label">Empresa</span>
             <select

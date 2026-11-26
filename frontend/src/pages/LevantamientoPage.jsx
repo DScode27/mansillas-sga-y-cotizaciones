@@ -30,6 +30,7 @@ import {
   uploadFotoSilla,
 } from '../api/sillas'
 import { descargarQrPdf } from '../api/qr'
+import { finalizarVisita } from '../api/visitas'
 import { descargarBlob } from '../utils/descargarBlob'
 import { ROLES } from '../auth/roles'
 import { useAuth } from '../context/auth-context'
@@ -93,6 +94,12 @@ export default function LevantamientoPage() {
   const [errorSillas, setErrorSillas] = useState('')
   const [descargando, setDescargando] = useState(false)
   const [errorDescarga, setErrorDescarga] = useState('')
+
+  // "Terminar levantamiento" (solo técnico): estado en curso, error y el estado
+  // de la visita ya finalizada localmente para reflejarlo sin recargar la lista.
+  const [finalizando, setFinalizando] = useState(false)
+  const [errorFinalizar, setErrorFinalizar] = useState('')
+  const [visitaFinalizadaId, setVisitaFinalizadaId] = useState(null)
 
   const [form, setForm] = useState(formInicial)
   const [fotos, setFotos] = useState([])
@@ -303,6 +310,35 @@ export default function LevantamientoPage() {
       setErrorSillas('No se pudieron cargar las sillas.')
     } finally {
       setCargandoSillas(false)
+    }
+  }
+
+  // ¿La visita elegida ya está finalizada? Se mira el estado de la lista o el
+  // marcador local tras pulsar "Terminar levantamiento".
+  const visitaFinalizada =
+    visitaFinalizadaId === idVisitaSel ||
+    visitaSeleccionada?.estado === 'FINALIZADA'
+
+  // Termina el levantamiento de la visita (solo técnico). Deja la visita en
+  // FINALIZADA; a partir de ahí aparece así en el portal del cliente.
+  async function handleFinalizarVisita() {
+    if (!idVisitaSel) return
+    setErrorFinalizar('')
+    setFinalizando(true)
+    try {
+      await finalizarVisita(idVisitaSel)
+      setVisitaFinalizadaId(idVisitaSel)
+    } catch (err) {
+      const status = err.response?.status
+      if (status === 403) {
+        setErrorFinalizar('No tienes permiso para finalizar esta visita.')
+      } else if (status === 404) {
+        setErrorFinalizar('La visita ya no existe.')
+      } else {
+        setErrorFinalizar('No se pudo finalizar la visita. Inténtalo de nuevo.')
+      }
+    } finally {
+      setFinalizando(false)
     }
   }
 
@@ -763,15 +799,46 @@ export default function LevantamientoPage() {
         <section className="card">
           <div className="card__encabezado">
             <h2>Sillas levantadas</h2>
-            <button
-              className="btn btn--ghost"
-              type="button"
-              onClick={handleDescargarQr}
-              disabled={descargando || sillas.length === 0}
-            >
-              {descargando ? 'Generando PDF…' : 'Descargar QR (PDF)'}
-            </button>
+            <div className="card__acciones">
+              <button
+                className="btn btn--ghost"
+                type="button"
+                onClick={handleDescargarQr}
+                disabled={descargando || sillas.length === 0}
+              >
+                {descargando ? 'Generando PDF…' : 'Descargar QR (PDF)'}
+              </button>
+              {esTecnico && (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={handleFinalizarVisita}
+                  disabled={
+                    finalizando || sillas.length === 0 || visitaFinalizada
+                  }
+                >
+                  {visitaFinalizada
+                    ? 'Levantamiento terminado'
+                    : finalizando
+                      ? 'Terminando…'
+                      : 'Terminar levantamiento'}
+                </button>
+              )}
+            </div>
           </div>
+
+          {esTecnico && visitaFinalizada && (
+            <p className="form-success" role="status">
+              Levantamiento terminado. Las sillas ya están disponibles para el
+              cliente.
+            </p>
+          )}
+
+          {errorFinalizar && (
+            <p className="form-error" role="alert">
+              {errorFinalizar}
+            </p>
+          )}
 
           {errorDescarga && (
             <p className="form-error" role="alert">

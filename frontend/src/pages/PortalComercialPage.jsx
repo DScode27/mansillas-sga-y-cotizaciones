@@ -725,7 +725,7 @@ export default function PortalComercialPage() {
                                     disabled={enviando}
                                   />
                                   <span className="form-field__label">
-                                    Confirmo que validé el levantamiento (HU-12).
+                                    Confirmo que validé el levantamiento.
                                   </span>
                                 </label>
 

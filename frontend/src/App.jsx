@@ -11,7 +11,7 @@ import { ROLES } from './auth/roles'
 import RequireAuth from './auth/RequireAuth'
 import RequireRole from './auth/RequireRole'
 import AppLayout from './components/AppLayout'
-import HomePage from './pages/HomePage'
+import HomeRedirect from './pages/HomeRedirect'
 import LoginPage from './pages/LoginPage'
 import EmpresasPage from './pages/EmpresasPage'
 import LevantamientoPage from './pages/LevantamientoPage'
@@ -40,7 +40,7 @@ export default function App() {
 
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
-          <Route index element={<HomePage />} />
+          <Route index element={<HomeRedirect />} />
 
           {/* Solo COMERCIAL_MANSILLAS gestiona usuarios (HU-20). */}
           <Route element={<RequireRole roles={[ROLES.COMERCIAL_MANSILLAS]} />}>

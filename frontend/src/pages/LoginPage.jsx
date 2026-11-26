@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import logoMansillas from '../assets/logoMansillas.jpg'
+import PasswordField from '../components/PasswordField'
 import { useAuth } from '../context/auth-context'
 
 export default function LoginPage() {
@@ -86,9 +87,7 @@ export default function LoginPage() {
 
           <label className="form-field">
             <span className="form-field__label">Contraseña</span>
-            <input
-              className="form-field__input"
-              type="password"
+            <PasswordField
               name="password"
               autoComplete="current-password"
               value={password}

@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react'
 import { listMisSillas, listMisPrecotizaciones } from '../api/portal-cliente'
 import { getPermisoQr, setPermisoQr } from '../api/permisos-qr'
 import { useAuth } from '../context/auth-context'
+import SillaCard from '../components/SillaCard'
 
 // Opciones de permiso QR con etiqueta legible (RF-18, R2). El valor es el entero
 // que el backend espera (1/2/3); la etiqueta a/b/c es la que ve el admin.
@@ -251,20 +252,15 @@ export default function PortalClientePage() {
         {!cargandoSillas && !errorSillas && sillas.length > 0 && (
           <ul className="sillas-lista">
             {sillas.map((s) => (
-              <li key={s.id_silla} className="sillas-lista__item">
-                <div className="sillas-lista__cabecera">
-                  <span className="sillas-lista__qr">{s.codigo_qr}</span>
-                  {s.sugerir_cambio ? (
-                    <span className="badge badge--alerta">Sugerir cambio</span>
-                  ) : (
-                    <span className="badge badge--ok">En buen estado</span>
-                  )}
-                </div>
-                {s.cargo && <p className="sillas-lista__cargo">{s.cargo}</p>}
-                {s.sede && (
-                  <p className="sillas-lista__componentes">Sede: {s.sede}</p>
-                )}
-              </li>
+              <SillaCard
+                key={s.id_silla}
+                silla={s}
+                extra={
+                  s.sede ? (
+                    <p className="sillas-lista__componentes">Sede: {s.sede}</p>
+                  ) : null
+                }
+              />
             ))}
           </ul>
         )}

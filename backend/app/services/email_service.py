@@ -50,12 +50,17 @@ class SmtpEmailSender:
 
     def enviar_codigo(self, correo: str, codigo: str) -> None:
         mensaje = EmailMessage()
-        mensaje["Subject"] = "Tu código de verificación"
+        mensaje["Subject"] = "Tu código de verificación - Mansillas SIC"
         mensaje["From"] = settings.smtp_from
         mensaje["To"] = correo
         mensaje.set_content(
-            f"Tu código de verificación es: {codigo}\n\n"
-            f"Caduca en {settings.otp_ttl_minutes} minutos."
+            "Mansillas SIC\n\n"
+            "Para enviar tu ticket de soporte, usa este código de "
+            "verificación:\n\n"
+            f"    {codigo}\n\n"
+            f"El código caduca en {settings.otp_ttl_minutes} minutos. No lo "
+            "compartas con nadie.\n"
+            "Si tú no solicitaste este código, ignora este mensaje."
         )
 
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as servidor:

@@ -442,9 +442,14 @@ def enviar_precotizacion(
     asunto = "Su propuesta de Mansillas SIC"
     cuerpo = (
         "Estimado cliente,\n\n"
-        "Puede consultar su propuesta en el siguiente enlace:\n"
+        "Mansillas SIC ha preparado una propuesta para usted. Puede "
+        "consultarla y aceptarla de forma segura en el siguiente enlace:\n\n"
         f"{enlace}\n\n"
-        "Gracias."
+        "Al abrir el enlace podrá revisar el detalle del levantamiento y, si "
+        "está de acuerdo, confirmar la propuesta con un código que le "
+        "enviaremos por correo.\n\n"
+        "Si usted no esperaba este mensaje, puede ignorarlo.\n\n"
+        "Gracias por confiar en Mansillas SIC."
     )
 
     try:
@@ -684,9 +689,10 @@ def solicitar_otp(
     db.flush()
 
     cuerpo = (
-        "Su código de verificación es: "
-        f"{codigo}\n\n"
-        "Vence en 10 minutos. No comparta este código con nadie.\n"
+        "Mansillas SIC\n\n"
+        "Para confirmar su propuesta, use este código de verificación:\n\n"
+        f"    {codigo}\n\n"
+        "El código vence en 10 minutos. No lo comparta con nadie.\n"
         "Si usted no solicitó este código, ignore este mensaje."
     )
     try:

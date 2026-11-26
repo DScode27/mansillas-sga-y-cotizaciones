@@ -210,6 +210,39 @@ def actualizar_visita(
     return visita
 
 
+@router.put("/{id_visita}/finalizar", response_model=VisitaOut)
+def finalizar_visita(
+    id_visita: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> Visita:
+    """El técnico dueño de la visita la marca como FINALIZADA (HU-28).
+
+    Cierra el levantamiento desde la pantalla móvil del técnico, sin pasar por el
+    `PUT /visitas/{id}` del comercial. Solo el TECNICO asignado a la visita puede
+    hacerlo (`require_tecnico_owns_visita`); cualquier otro rol recibe 403. No
+    reescribe `cantidad_estimada` (RN-04). Idempotente: finalizar una visita ya
+    FINALIZADA la deja igual.
+    """
+    if user.rol != "TECNICO":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol no autorizado")
+
+    visita = _cargar_visita(db, id_visita)
+    require_tecnico_owns_visita(user, visita)
+
+    visita.estado = "FINALIZADA"
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "No fue posible finalizar la visita",
+        ) from None
+    db.refresh(visita)
+    return visita
+
+
 @router.delete("/{id_visita}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_visita(
     id_visita: int,

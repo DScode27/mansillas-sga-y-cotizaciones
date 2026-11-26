@@ -189,3 +189,42 @@ def test_comercial_ve_todas_las_visitas(cliente, fabrica, auth):
     respuesta = cliente.get("/visitas", headers=auth(comercial))
     assert respuesta.status_code == 200
     assert {visita["id_visita"] for visita in respuesta.json()} == creadas
+
+
+def test_finalizar_visita_tecnico_dueno(cliente, fabrica, auth):
+    """El técnico dueño marca su visita como FINALIZADA (HU-28)."""
+    datos = fabrica.escenario()
+    respuesta = cliente.put(
+        f"/visitas/{datos['visita'].id_visita}/finalizar",
+        headers=auth(datos["tecnico"]),
+    )
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["estado"] == "FINALIZADA"
+
+
+def test_finalizar_visita_tecnico_ajeno_da_403(cliente, fabrica, auth):
+    """Un técnico que no es el asignado no puede finalizar la visita."""
+    datos = fabrica.escenario()
+    otro = fabrica.usuario("TECNICO")
+    respuesta = cliente.put(
+        f"/visitas/{datos['visita'].id_visita}/finalizar",
+        headers=auth(otro),
+    )
+    assert respuesta.status_code == 403
+
+
+def test_finalizar_visita_rol_no_tecnico_da_403(cliente, fabrica, auth):
+    """El comercial usa su propio PUT; este endpoint es solo del técnico."""
+    datos = fabrica.escenario()
+    respuesta = cliente.put(
+        f"/visitas/{datos['visita'].id_visita}/finalizar",
+        headers=auth(datos["comercial"]),
+    )
+    assert respuesta.status_code == 403
+
+
+def test_finalizar_visita_inexistente_da_404(cliente, fabrica, auth):
+    """Finalizar una visita que no existe responde 404."""
+    tecnico = fabrica.usuario("TECNICO")
+    respuesta = cliente.put("/visitas/999999/finalizar", headers=auth(tecnico))
+    assert respuesta.status_code == 404
