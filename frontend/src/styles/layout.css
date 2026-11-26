@@ -729,6 +729,31 @@
   gap: 0.75rem;
 }
 
+/* Bloque de envío de ticket por QR (RF-24): separado de la ficha por un borde
+   superior, con el mismo ritmo vertical del resto de la tarjeta. */
+.qr-publico__ticket {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-borde);
+}
+
+.qr-publico__ticket h2 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Texto de ayuda dentro del formulario en rejilla: ocupa el ancho completo. */
+.qr-publico__ticket-ayuda {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* Campo que ocupa el ancho completo de la rejilla del formulario (p. ej. la
+   descripción del ticket). */
+.form-field--full {
+  grid-column: 1 / -1;
+}
+
 /* Encabezado de tarjeta con un título y una acción a la derecha (p. ej. el
    botón "Descargar QR (PDF)" sobre la lista de sillas levantadas). Se apila en
    móvil para no apretujar el botón contra el título. */

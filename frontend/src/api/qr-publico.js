@@ -34,6 +34,9 @@ export class TokenNoEncontrado extends Error {
 // Fichas simuladas, indexadas por token. Reflejan lo que expone el backend:
 // identificación de la silla, dueño (empresa/sede) y estado de los componentes.
 // Coincide con `token_publico` que genera el mock de sillas (`mock-token-1`…).
+// `permiso_qr` decide el bloque de tickets de la pantalla (1=solo consulta,
+// 2=consulta+tickets, 3=tickets solo admin); se añaden fichas con nivel 1 y 3
+// para poder demostrar los avisos sin formulario.
 const fichasMock = {
   'mock-token-1': {
     codigo_qr: 'SIC-00000001',
@@ -42,6 +45,7 @@ const fichasMock = {
     sede: 'Sede Principal',
     serial_antiguo: 'OLD-3391',
     cargo: 'Analista de compras',
+    permiso_qr: 2,
     componentes: [
       { nombre: 'Cilindros', estado: 'BUENO' },
       { nombre: 'Ruedas', estado: 'MANTENIMIENTO' },
@@ -50,6 +54,64 @@ const fichasMock = {
       { nombre: 'Malla', estado: 'BUENO' },
     ],
   },
+  'mock-token-2': {
+    codigo_qr: 'SIC-00000002',
+    estado: 'REGISTRADA',
+    empresa: 'Industrias del Valle S.A.S.',
+    sede: 'Sede Principal',
+    cargo: 'Auxiliar contable',
+    permiso_qr: 1,
+    componentes: [{ nombre: 'Ruedas', estado: 'BUENO' }],
+  },
+  'mock-token-3': {
+    codigo_qr: 'SIC-00000003',
+    estado: 'REGISTRADA',
+    empresa: 'Industrias del Valle S.A.S.',
+    sede: 'Sede Secundaria',
+    cargo: 'Jefe de planta',
+    permiso_qr: 3,
+    componentes: [{ nombre: 'Bases', estado: 'MANTENIMIENTO' }],
+  },
+}
+
+// Empleados simulados por token, coherentes con cada ficha. Identifican al
+// empleado por correo o documento dentro de la empresa dueña, igual que el
+// backend (RN-6). Un correo/documento que no coincida produce el 404
+// "Empleado no encontrado".
+const empleadosMock = {
+  'mock-token-1': { correo: 'empleado@valle.com', documento: '1001001001' },
+  'mock-token-2': { correo: 'auxiliar@valle.com', documento: '1002002002' },
+  'mock-token-3': { correo: 'jefe@valle.com', documento: '1003003003' },
+}
+
+// OTP fijo que el mock acepta como válido. El mock NUNCA lo envía al navegador
+// ni lo muestra; solo lo compara en memoria, igual que el backend compara el
+// hash sin exponer el código. En modo real el empleado lo recibe por correo.
+const OTP_MOCK_VALIDO = '000000'
+
+// OTPs emitidos en el mock, por token: simula que el empleado ya solicitó su
+// código. Una entrada presente equivale a "hay un OTP vigente para este token".
+const otpEmitidosMock = new Set()
+
+// Contador de tickets del mock para devolver un número incremental coherente.
+let siguienteIdTicketMock = 9001
+
+// Construye un error con forma de respuesta axios (`err.response.status`) para
+// que la pantalla mapee el código HTTP igual que con el backend real.
+function errorHttpMock(status, detail) {
+  const error = new Error(detail)
+  error.response = { status, data: { detail } }
+  return error
+}
+
+// Localiza al empleado simulado de un token comparando correo o documento, con
+// el mismo criterio que el backend (acotado a la empresa dueña de la silla).
+function coincideEmpleadoMock(token, { correo, documento }) {
+  const empleado = empleadosMock[token]
+  if (!empleado) return false
+  if (correo && empleado.correo === correo) return true
+  if (documento && empleado.documento === documento) return true
+  return false
 }
 
 /* Trae la ficha pública de una silla por su `token_publico`.
@@ -61,7 +123,19 @@ export async function getSillaPublica(token) {
     if (!ficha) {
       throw new TokenNoEncontrado()
     }
-    return ficha
+    // Normaliza la ficha mock al mismo contrato que la rama real (incluye
+    // `permiso_qr`), para que la pantalla no dependa de qué rama la sirvió.
+    return {
+      id_silla: ficha.id_silla ?? null,
+      codigo_qr: ficha.codigo_qr,
+      estado: ficha.estado ?? null,
+      cargo: ficha.cargo ?? null,
+      permiso_qr: ficha.permiso_qr ?? null,
+      empresa: ficha.empresa ?? null,
+      sede: ficha.sede ?? null,
+      serial_antiguo: ficha.serial_antiguo ?? null,
+      componentes: ficha.componentes ?? [],
+    }
   }
 
   try {
@@ -91,4 +165,93 @@ export async function getSillaPublica(token) {
     }
     throw err
   }
+}
+
+/* Solicita el envío de un OTP al empleado de la silla (POST /qr/silla/{token}/otp).
+ *
+ * Paso 1 del flujo público de ticket (HU-24, RF-24). El empleado se identifica
+ * con su `correo` o su `documento`; el backend lo resuelve dentro de la empresa
+ * dueña de la silla y le envía el código por correo. Responde 204 sin cuerpo:
+ * esta función no devuelve nada en caso de éxito.
+ *
+ * El código NUNCA viaja a esta vista anónima: lo recibe el empleado por correo.
+ * En modo mock se registra que hay un OTP vigente para el token (sin exponer el
+ * valor) cuando la identificación coincide; si no, se reproduce el 404
+ * "Empleado no encontrado" del backend. Los errores HTTP se propagan tal cual
+ * (o con forma `err.response.status` en mock) para que la pantalla los mapee. */
+export async function solicitarOtpTicket(token, { correo, documento }) {
+  if (USE_MOCK.qrPublico) {
+    if (!fichasMock[token]) {
+      throw errorHttpMock(404, 'QR no válido')
+    }
+    if (!coincideEmpleadoMock(token, { correo, documento })) {
+      throw errorHttpMock(404, 'Empleado no encontrado')
+    }
+    otpEmitidosMock.add(token)
+    return
+  }
+
+  // 204 No Content: sin cuerpo que leer. Los errores (404 QR/empleado) se
+  // propagan para que la pantalla los mapee por `err.response.status`.
+  await publicClient.post(`/qr/silla/${token}/otp`, { correo, documento })
+}
+
+/* Crea un ticket validado por OTP para la silla (POST /qr/silla/{token}/ticket).
+ *
+ * Paso 2 del flujo público de ticket (HU-24, RF-24). Envía asunto, descripción,
+ * la identificación del empleado (`correo` o `documento`) y el `codigo` recibido
+ * por correo. El backend aplica el `permiso_qr` de la empresa (403 si el nivel
+ * no habilita al empleado), valida el OTP (400 si es inválido/expirado) y crea
+ * el ticket. Responde 201 con el `TicketOut`; esta función devuelve esos datos
+ * (incluye `id_ticket`, que la pantalla muestra como confirmación).
+ *
+ * El `codigo` solo se envía al backend: nunca se muestra ni registra en claro.
+ * En modo mock se validan permiso, identificación y OTP de forma coherente con
+ * el backend, devolviendo un ticket simulado con número incremental. */
+export async function crearTicket(
+  token,
+  { asunto, descripcion, correo, documento, codigo },
+) {
+  if (USE_MOCK.qrPublico) {
+    const ficha = fichasMock[token]
+    if (!ficha) {
+      throw errorHttpMock(404, 'QR no válido')
+    }
+    if (ficha.permiso_qr === 1) {
+      throw errorHttpMock(403, 'Permiso insuficiente')
+    }
+    if (ficha.permiso_qr === 3) {
+      throw errorHttpMock(
+        403,
+        'Solo el administrador del cliente puede crear tickets',
+      )
+    }
+    if (!coincideEmpleadoMock(token, { correo, documento })) {
+      throw errorHttpMock(404, 'Empleado no encontrado')
+    }
+    if (!otpEmitidosMock.has(token) || codigo !== OTP_MOCK_VALIDO) {
+      throw errorHttpMock(400, 'OTP inválido')
+    }
+    // OTP válido: se consume (un solo uso, como en el backend) y se devuelve un
+    // ticket simulado con el contrato de `TicketOut`.
+    otpEmitidosMock.delete(token)
+    const idTicket = siguienteIdTicketMock++
+    return {
+      id_ticket: idTicket,
+      id_silla: ficha.id_silla ?? null,
+      asunto,
+      descripcion,
+      estado: 'ABIERTO',
+      fecha_creacion: new Date().toISOString(),
+    }
+  }
+
+  const { data } = await publicClient.post(`/qr/silla/${token}/ticket`, {
+    asunto,
+    descripcion,
+    correo,
+    documento,
+    codigo,
+  })
+  return data
 }
