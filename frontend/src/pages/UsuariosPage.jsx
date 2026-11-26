@@ -7,9 +7,10 @@
  * Maneja estados de carga, error y vacío, y refleja los errores del backend
  * (correo duplicado 409, regla de empresa 400).
  */
-import { useEffect, useState } from 'react'
-import { createUsuario, listUsuarios } from '../api/usuarios'
+import { Fragment, useEffect, useState } from 'react'
+import { asignarRol, createUsuario, listUsuarios } from '../api/usuarios'
 import { ROLES } from '../auth/roles'
+import { construirCambioRol, rolEsDeCliente } from './usuariosRol'
 
 // Roles que se pueden asignar desde esta pantalla, con etiqueta legible.
 const ROLES_ASIGNABLES = [
@@ -18,8 +19,6 @@ const ROLES_ASIGNABLES = [
   { value: ROLES.ADMIN_CLIENTE, label: 'Administrador cliente' },
   { value: ROLES.EMPLEADO_CLIENTE, label: 'Empleado cliente' },
 ]
-
-const ROLES_CLIENTE = [ROLES.ADMIN_CLIENTE, ROLES.EMPLEADO_CLIENTE]
 
 const FORM_INICIAL = {
   nombre: '',
@@ -39,7 +38,15 @@ export default function UsuariosPage() {
   const [errorForm, setErrorForm] = useState('')
   const [exito, setExito] = useState('')
 
-  const rolEsCliente = ROLES_CLIENTE.includes(form.rol)
+  // Edición de rol inline (RF-20): id del usuario con el control abierto, borrador
+  // del nuevo rol/empresa, y estados de envío/error por fila.
+  const [rolEditandoId, setRolEditandoId] = useState(null)
+  const [rolDraft, setRolDraft] = useState({ rol: ROLES.TECNICO, id_empresa: '' })
+  const [guardandoRol, setGuardandoRol] = useState(false)
+  const [errorRol, setErrorRol] = useState('')
+
+  const rolEsCliente = rolEsDeCliente(form.rol)
+  const rolDraftEsCliente = rolEsDeCliente(rolDraft.rol)
 
   async function cargarUsuarios() {
     setCargando(true)
@@ -111,6 +118,58 @@ export default function UsuariosPage() {
       }
     } finally {
       setEnviando(false)
+    }
+  }
+
+  // Abre/cierra el control de cambio de rol de una fila. Al abrir, siembra el
+  // borrador con el rol y empresa actuales del usuario.
+  function toggleEdicionRol(usuario) {
+    setErrorRol('')
+    if (rolEditandoId === usuario.id_usuario) {
+      setRolEditandoId(null)
+      return
+    }
+    setRolEditandoId(usuario.id_usuario)
+    setRolDraft({
+      rol: usuario.rol,
+      id_empresa: usuario.id_empresa != null ? String(usuario.id_empresa) : '',
+    })
+  }
+
+  function actualizarRolDraft(campo, valor) {
+    setRolDraft((prev) => ({ ...prev, [campo]: valor }))
+  }
+
+  async function handleGuardarRol(event, idUsuario) {
+    event.preventDefault()
+    setErrorRol('')
+
+    // Misma regla condicional que el alta: cliente exige empresa, interno la omite.
+    const { error, payload } = construirCambioRol({
+      rol: rolDraft.rol,
+      idEmpresa: rolDraft.id_empresa,
+    })
+    if (error) {
+      setErrorRol(error)
+      return
+    }
+
+    setGuardandoRol(true)
+    try {
+      await asignarRol(idUsuario, payload)
+      setRolEditandoId(null)
+      await cargarUsuarios()
+    } catch (err) {
+      const status = err.response?.status
+      if (status === 400) {
+        setErrorRol(err.response?.data?.detail ?? 'Regla de rol/empresa inválida.')
+      } else if (status === 404) {
+        setErrorRol('El usuario ya no existe.')
+      } else {
+        setErrorRol('No se pudo cambiar el rol. Inténtalo de nuevo.')
+      }
+    } finally {
+      setGuardandoRol(false)
     }
   }
 
@@ -236,26 +295,106 @@ export default function UsuariosPage() {
                   <th>Rol</th>
                   <th>Empresa</th>
                   <th>Estado</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {usuarios.map((u) => (
-                  <tr key={u.id_usuario}>
-                    <td>{u.nombre}</td>
-                    <td>{u.correo}</td>
-                    <td>{u.rol}</td>
-                    <td>{u.id_empresa ?? '—'}</td>
-                    <td>
-                      <span
-                        className={
-                          u.activo ? 'badge badge--ok' : 'badge badge--off'
-                        }
-                      >
-                        {u.activo ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {usuarios.map((u) => {
+                  const editando = rolEditandoId === u.id_usuario
+                  return (
+                    <Fragment key={u.id_usuario}>
+                      <tr>
+                        <td>{u.nombre}</td>
+                        <td>{u.correo}</td>
+                        <td>{u.rol}</td>
+                        <td>{u.id_empresa ?? '—'}</td>
+                        <td>
+                          <span
+                            className={
+                              u.activo ? 'badge badge--ok' : 'badge badge--off'
+                            }
+                          >
+                            {u.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className="btn btn--ghost"
+                            type="button"
+                            onClick={() => toggleEdicionRol(u)}
+                            aria-expanded={editando}
+                            disabled={guardandoRol}
+                          >
+                            {editando ? 'Cancelar' : 'Cambiar rol'}
+                          </button>
+                        </td>
+                      </tr>
+                      {editando && (
+                        <tr className="data-table__detalle">
+                          <td colSpan={6}>
+                            <form
+                              className="form-grid"
+                              onSubmit={(e) => handleGuardarRol(e, u.id_usuario)}
+                            >
+                              <label className="form-field">
+                                <span className="form-field__label">Nuevo rol</span>
+                                <select
+                                  className="form-field__input"
+                                  value={rolDraft.rol}
+                                  onChange={(e) =>
+                                    actualizarRolDraft('rol', e.target.value)
+                                  }
+                                  disabled={guardandoRol}
+                                >
+                                  {ROLES_ASIGNABLES.map((r) => (
+                                    <option key={r.value} value={r.value}>
+                                      {r.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              {rolDraftEsCliente && (
+                                <label className="form-field">
+                                  <span className="form-field__label">
+                                    ID de empresa
+                                  </span>
+                                  <input
+                                    className="form-field__input"
+                                    type="number"
+                                    min={1}
+                                    value={rolDraft.id_empresa}
+                                    onChange={(e) =>
+                                      actualizarRolDraft('id_empresa', e.target.value)
+                                    }
+                                    required
+                                    disabled={guardandoRol}
+                                  />
+                                </label>
+                              )}
+
+                              {errorRol && (
+                                <p className="form-error" role="alert">
+                                  {errorRol}
+                                </p>
+                              )}
+
+                              <div className="form-actions">
+                                <button
+                                  className="btn"
+                                  type="submit"
+                                  disabled={guardandoRol}
+                                >
+                                  {guardandoRol ? 'Guardando…' : 'Guardar rol'}
+                                </button>
+                              </div>
+                            </form>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>
