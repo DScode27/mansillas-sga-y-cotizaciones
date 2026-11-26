@@ -120,3 +120,51 @@ class InventarioItemOut(BaseModel):
     cargo: str
     codigo_qr: str
     estado: str
+
+
+# --- Catálogos de listado: sedes, departamentos, empleados (Fase 4, R9) -----
+
+class SedeOut(BaseModel):
+    """Sede de una empresa (listado de solo lectura).
+
+    Campos directos de la tabla `sede`; `direccion` y `ciudad` son opcionales
+    en el SQL, por eso se admiten nulos.
+    """
+
+    id_sede: int
+    id_empresa: int
+    nombre: str
+    direccion: str | None = None
+    ciudad: str | None = None
+
+
+class DepartamentoOut(BaseModel):
+    """Departamento (área) de una sede dentro de una empresa.
+
+    El departamento cuelga de una sede (FK compuesta `(id_empresa, id_sede)`),
+    por eso se devuelven ambos identificadores de contexto.
+    """
+
+    id_departamento: int
+    id_empresa: int
+    id_sede: int
+    nombre: str
+
+
+class EmpleadoOut(BaseModel):
+    """Empleado del cliente (listado de solo lectura).
+
+    No es una vista pública: el aislamiento por empresa (roles internos o el
+    ADMIN_CLIENTE de la propia empresa) ya restringe quién ve `documento` y
+    `correo`, que son opcionales en el SQL.
+    """
+
+    id_empleado: int
+    id_empresa: int
+    id_sede: int
+    id_departamento: int
+    nombre: str
+    documento: str | None = None
+    correo: str | None = None
+    cargo: str
+    activo: bool

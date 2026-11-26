@@ -15,10 +15,13 @@ from app.routers import (
     accesos,
     auth,
     carga_excel,
+    departamentos,
+    empleados,
     fotos,
     inventario,
     precotizaciones,
     qr,
+    sedes,
     sillas,
     usuarios,
     visitas,
@@ -49,6 +52,9 @@ app.include_router(qr.router)
 app.include_router(accesos.router)
 app.include_router(carga_excel.router)
 app.include_router(inventario.router)
+app.include_router(sedes.router)
+app.include_router(departamentos.router)
+app.include_router(empleados.router)
 
 
 @app.get("/")
