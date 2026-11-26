@@ -3,7 +3,7 @@ import uuid
 
 from sqlalchemy import func, select
 
-from app.models import Silla
+from app.models import Silla, Visita
 
 PATRON_QR = re.compile(r"^SIC-\d{8}$")
 SERIAL_DUPLICADO = "serial_antiguo duplicado para la empresa"
@@ -117,6 +117,157 @@ def test_sillas_no_se_limitan_por_cantidad_estimada(cliente, fabrica, auth):
             datos["empleado"],
         )
         assert respuesta.status_code == 201, respuesta.text
+
+
+def test_registrar_adicionales_no_cambia_cantidad_estimada(cliente, fabrica, auth, db):
+    """HU-02 Req 1.2: the visit's cantidad_estimada is preserved after extra chairs."""
+    datos = fabrica.escenario()
+    visita = datos["visita"]
+    estimada = visita.cantidad_estimada
+
+    for _ in range(estimada + 2):
+        assert _registrar(
+            cliente, auth, datos["tecnico"], visita, datos["empleado"]
+        ).status_code == 201
+
+    db.expire_all()
+    recargada = db.get(Visita, visita.id_visita)
+    assert recargada.cantidad_estimada == estimada
+
+
+def test_listar_sillas_de_visita(cliente, fabrica, auth):
+    """HU-02 Req 2.1/2.2: the real count is the number of listed chairs, and
+    chairs of a different visit are not included."""
+    datos = fabrica.escenario()
+    estimada = datos["visita"].cantidad_estimada
+    total = estimada + 3
+    for _ in range(total):
+        assert _registrar(
+            cliente, auth, datos["tecnico"], datos["visita"], datos["empleado"]
+        ).status_code == 201
+
+    # A second visit of the same empresa/technician with its own chairs. These
+    # must not leak into the first visit's listing.
+    otra_sede = fabrica.sede(datos["empresa"])
+    otro_departamento = fabrica.departamento(datos["empresa"], otra_sede)
+    otro_empleado = fabrica.empleado(datos["empresa"], otra_sede, otro_departamento)
+    otra_visita = fabrica.visita(
+        datos["empresa"], otra_sede, datos["comercial"], datos["tecnico"]
+    )
+    for _ in range(2):
+        assert _registrar(
+            cliente, auth, datos["tecnico"], otra_visita, otro_empleado
+        ).status_code == 201
+
+    respuesta = cliente.get(
+        "/sillas",
+        params={"id_visita": datos["visita"].id_visita},
+        headers=auth(datos["tecnico"]),
+    )
+
+    assert respuesta.status_code == 200, respuesta.text
+    cuerpo = respuesta.json()
+    assert len(cuerpo) == total
+    assert total > estimada
+    assert all(silla["id_visita"] == datos["visita"].id_visita for silla in cuerpo)
+
+
+def test_listar_sillas_visita_sin_sillas(cliente, fabrica, auth):
+    """HU-02 Req 2.3: an existing visit with no chairs returns an empty list."""
+    datos = fabrica.escenario()
+
+    respuesta = cliente.get(
+        "/sillas",
+        params={"id_visita": datos["visita"].id_visita},
+        headers=auth(datos["tecnico"]),
+    )
+
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json() == []
+
+
+def test_listar_sillas_visita_inexistente(cliente, fabrica, auth):
+    """HU-02 Req 2.4: an unknown visit returns 404."""
+    datos = fabrica.escenario()
+
+    respuesta = cliente.get(
+        "/sillas",
+        params={"id_visita": 999999},
+        headers=auth(datos["comercial"]),
+    )
+
+    assert respuesta.status_code == 404
+
+
+def test_listar_sillas_requiere_id_visita(cliente, fabrica, auth):
+    """HU-02: the id_visita query parameter is required (422 when missing)."""
+    datos = fabrica.escenario()
+
+    respuesta = cliente.get("/sillas", headers=auth(datos["tecnico"]))
+
+    assert respuesta.status_code == 422
+
+
+def test_listar_sillas_tecnico_ajeno(cliente, fabrica, auth):
+    """HU-02 Req 2.5: a technician cannot list chairs of a visit that is not theirs."""
+    datos = fabrica.escenario()
+    otro_tecnico = fabrica.usuario("TECNICO")
+
+    respuesta = cliente.get(
+        "/sillas",
+        params={"id_visita": datos["visita"].id_visita},
+        headers=auth(otro_tecnico),
+    )
+
+    assert respuesta.status_code == 403
+
+
+def test_listar_sillas_comercial_cualquier_visita(cliente, fabrica, auth):
+    """HU-02 Req 2.6: a commercial may list chairs of a visit assigned to a
+    different commercial (access to any visit, not only their own)."""
+    datos = fabrica.escenario()
+    assert _registrar(
+        cliente, auth, datos["tecnico"], datos["visita"], datos["empleado"]
+    ).status_code == 201
+    otro_comercial = fabrica.usuario("COMERCIAL_MANSILLAS")
+
+    respuesta = cliente.get(
+        "/sillas",
+        params={"id_visita": datos["visita"].id_visita},
+        headers=auth(otro_comercial),
+    )
+
+    assert respuesta.status_code == 200, respuesta.text
+    assert len(respuesta.json()) == 1
+
+
+def test_listar_sillas_rol_no_autorizado(cliente, fabrica, auth):
+    """HU-02 Req 2.7: a role other than tecnico/comercial is rejected."""
+    datos = fabrica.escenario()
+    admin_cliente = fabrica.usuario("ADMIN_CLIENTE", empresa=datos["empresa"])
+
+    respuesta = cliente.get(
+        "/sillas",
+        params={"id_visita": datos["visita"].id_visita},
+        headers=auth(admin_cliente),
+    )
+
+    assert respuesta.status_code == 403
+
+
+def test_listar_sillas_sin_autenticacion(cliente, fabrica):
+    """HU-02: without a bearer token and without the dev stub header
+    (`X-Dev-User-Id`), the request is rejected by the existing
+    `get_current_user` dependency. In the test environment `DEV_USER_ID` is
+    unset, so no identity can be resolved and the response is 401."""
+    datos = fabrica.escenario()
+
+    respuesta = cliente.get(
+        "/sillas",
+        params={"id_visita": datos["visita"].id_visita},
+    )
+
+    assert respuesta.status_code == 401
 
 
 def test_consulta_silla_y_token(cliente, fabrica, auth):

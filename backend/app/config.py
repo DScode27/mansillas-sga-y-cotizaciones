@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     database_url: str = ""
     db_schema: str = "mansillas"
 
+    # Chair photographs (HU-10). Files live on local disk; only the relative
+    # path is stored in `fotografia.ruta_archivo`. `photo_storage_dir` is
+    # resolved under BACKEND_DIR when relative.
+    photo_storage_dir: str = "var/fotos"
+    photo_max_bytes: int = 10 * 1024 * 1024  # 10 MB per photo
+    photo_allowed_formats: tuple[str, ...] = ("JPEG", "PNG", "WEBP")
+
     # Development auth stub (see app/deps.py). Ignored in production.
     dev_user_id: int | None = None
 
@@ -57,9 +64,41 @@ class Settings(BaseSettings):
     supabase_key: str = ""
     supabase_schema: str = "mansillas"
 
+    # SMTP for the pre-quotation link email (HU-13). No credentials in source;
+    # all come from the environment. Missing config does not stop the app; a
+    # send attempt without enough config returns a controlled error.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_tls: bool = True  # STARTTLS; a secure connection is never silently downgraded
+    smtp_timeout: float = 10.0
+    # Public proposal path appended to FRONTEND_URL for the link (provisional).
+    proposal_path: str = "/propuesta"
+
+    # OTP for pre-quotation acceptance (HU-15). Only the SECRET is configurable
+    # from the environment; it is INDEPENDENT of `jwt_secret` and empty by
+    # default, so the app starts without it, but OTP operations fail with a
+    # controlled error when it is missing/insecure. The numeric OTP parameters
+    # are fixed, documented MVP constants and live in `app/services/otp.py`
+    # (not env-overridable).
+    otp_secret: str = ""
+
+    @property
+    def smtp_configurado(self) -> bool:
+        """True when the minimum SMTP settings to send are present."""
+        return bool(self.smtp_host and self.smtp_from)
+
     @property
     def is_production(self) -> bool:
         return self.app_env.strip().lower() in PRODUCTION_ENVIRONMENTS
+
+    @property
+    def photo_storage_path(self) -> Path:
+        """Absolute photo storage directory (relative paths resolve under BACKEND_DIR)."""
+        base = Path(self.photo_storage_dir)
+        return base if base.is_absolute() else (BACKEND_DIR / base)
 
     @property
     def sqlalchemy_url(self) -> str:

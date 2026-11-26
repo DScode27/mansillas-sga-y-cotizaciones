@@ -60,6 +60,11 @@ tmp/
 temp/
 
 # =================================
+# FOTOGRAFÍAS DE SILLAS (HU-10, almacenamiento local)
+# =================================
+backend/var/fotos/
+
+# =================================
 # BASE DE DATOS Y BACKUPS LOCALES
 # =================================
 *.sqlite
@@ -72,4 +77,34 @@ temp/
 # ARCHIVOS DE CONFIGURACIÓN LOCAL
 # =================================
 .python-version.local
-.kiro
+
+# =================================
+# KIRO / SDD
+# Se ignora .kiro por defecto (estado privado del IDE, specs en progreso,
+# caches). Se versionan SOLO los documentos SDD de TODOS los integrantes:
+# specs (requirements/design/tasks/.config.kiro) y steering (product/tech/
+# structure). Se abre cada nivel de carpeta y se vuelve a ignorar su
+# contenido, permitiendo únicamente los archivos listados explícitamente, para
+# que ningún archivo privado adicional se reincluya al abrir el directorio.
+# =================================
+.kiro/
+
+!backend/.kiro/
+backend/.kiro/*
+
+!backend/.kiro/specs/
+backend/.kiro/specs/*
+!backend/.kiro/specs/*/
+backend/.kiro/specs/*/*
+
+!backend/.kiro/specs/*/requirements.md
+!backend/.kiro/specs/*/design.md
+!backend/.kiro/specs/*/tasks.md
+!backend/.kiro/specs/*/.config.kiro
+
+!backend/.kiro/steering/
+backend/.kiro/steering/*
+
+!backend/.kiro/steering/product.md
+!backend/.kiro/steering/tech.md
+!backend/.kiro/steering/structure.md
