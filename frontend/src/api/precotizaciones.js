@@ -35,15 +35,18 @@ export async function listPrecotizaciones(idVisita) {
 }
 
 export async function createPrecotizacion({
-  id_empresa,
   id_visita,
-  creada_por,
   observaciones,
 }) {
+  // Contrato real (POST /precotizaciones, `PrecotizacionCreate`): solo acepta
+  // `id_visita`, `confirmar_validacion` y `observaciones`. `id_empresa` y
+  // `creada_por` los deriva el backend del usuario comercial autenticado, así
+  // que no se envían. `confirmar_validacion` DEBE ser `true` (StrictBool): el
+  // comercial confirma que revisó el levantamiento (HU-12); sin ella el backend
+  // responde 422.
   const payload = {
-    id_empresa: Number(id_empresa),
     id_visita: Number(id_visita),
-    creada_por: Number(creada_por),
+    confirmar_validacion: true,
     observaciones: observaciones?.trim() || null,
   }
 

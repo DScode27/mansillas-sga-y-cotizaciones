@@ -46,6 +46,7 @@ export default function EmpleadosSection({ empresa }) {
   // Importación Excel
   const inputArchivo = useRef(null)
   const [nombreArchivo, setNombreArchivo] = useState('')
+  const [archivo, setArchivo] = useState(null) // File original, para el envío real
   const [preview, setPreview] = useState(null) // { columnasFaltantes, validas, errores }
   const [errorArchivo, setErrorArchivo] = useState('')
   const [importando, setImportando] = useState(false)
@@ -116,9 +117,11 @@ export default function EmpleadosSection({ empresa }) {
     setPreview(null)
     if (!file) {
       setNombreArchivo('')
+      setArchivo(null)
       return
     }
     setNombreArchivo(file.name)
+    setArchivo(file)
     try {
       const resultado = await parseEmpleadosExcel(file)
       setPreview(resultado)
@@ -130,6 +133,7 @@ export default function EmpleadosSection({ empresa }) {
   function limpiarImportacion() {
     setPreview(null)
     setNombreArchivo('')
+    setArchivo(null)
     setErrorArchivo('')
     setResumen(null)
     if (inputArchivo.current) inputArchivo.current.value = ''
@@ -144,13 +148,19 @@ export default function EmpleadosSection({ empresa }) {
         id_empresa: idEmpresa,
         nombre_archivo: nombreArchivo,
         filas: preview.validas,
+        archivo,
       })
       setResumen(res)
       setPreview(null)
+      setArchivo(null)
       if (inputArchivo.current) inputArchivo.current.value = ''
       await cargarEmpleados()
-    } catch {
-      setErrorArchivo('No se pudo registrar la carga. Inténtalo de nuevo.')
+    } catch (err) {
+      // El endpoint real valida la extensión y el formato (400 con `detail`).
+      const detalle = err.response?.data?.detail
+      setErrorArchivo(
+        detalle ?? 'No se pudo registrar la carga. Inténtalo de nuevo.',
+      )
     } finally {
       setImportando(false)
     }
@@ -257,7 +267,7 @@ export default function EmpleadosSection({ empresa }) {
         <h4 className="empleados__subtitulo">Importar por Excel</h4>
         <p className="state-text">
           Columnas: nombre, cargo, sede, departamento (requeridas); documento y
-          correo (opcionales). Acepta <code>.xlsx</code> y <code>.csv</code>.
+          correo (opcionales). Solo <code>.xlsx</code>.
         </p>
 
         <label className="form-field" style={{ maxWidth: '26rem', marginTop: '0.5rem' }}>
@@ -266,7 +276,7 @@ export default function EmpleadosSection({ empresa }) {
             ref={inputArchivo}
             className="form-field__input"
             type="file"
-            accept=".xlsx,.xls,.csv"
+            accept=".xlsx"
             onChange={handleArchivo}
             disabled={importando}
           />

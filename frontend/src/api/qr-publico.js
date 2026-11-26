@@ -65,19 +65,24 @@ export async function getSillaPublica(token) {
   }
 
   try {
-    // Ruta real del backend de sillas: GET /sillas/token/{token}. Devuelve el
-    // contrato `SillaCreadaOut` (ids, cargo, codigo_qr, token_publico). Todavía
-    // no incluye el nombre de empresa/sede ni el estado de los componentes que
-    // esta ficha muestra; mientras el backend no los agregue, la pantalla los
-    // resuelve con sus valores por defecto (`?? '—'`) y no los renderiza.
-    const { data } = await publicClient.get(`/sillas/token/${token}`)
+    // Ruta pública real (HU-17): GET /qr/silla/{token}. Es el único endpoint
+    // anónimo de consulta por QR; `GET /sillas/token/{token}` es interno
+    // (contrato `SillaCreadaOut`) y no debe usarse aquí. El contrato público
+    // `ConsultaPublicaOut` expone solo datos básicos: `id_silla`, `codigo_qr`,
+    // `estado`, `cargo` y `permiso_qr` de la empresa dueña; nunca datos
+    // personales del empleado. Empresa/sede, serial y componentes aún NO los
+    // devuelve el backend, así que la pantalla los resuelve con `?? '—'` o no
+    // los renderiza (la ficha es defensiva ante campos ausentes).
+    const { data } = await publicClient.get(`/qr/silla/${token}`)
     return {
+      id_silla: data.id_silla ?? null,
       codigo_qr: data.codigo_qr,
       estado: data.estado ?? null,
+      cargo: data.cargo ?? null,
+      permiso_qr: data.permiso_qr ?? null,
       empresa: data.empresa ?? null,
       sede: data.sede ?? null,
       serial_antiguo: data.serial_antiguo ?? null,
-      cargo: data.cargo ?? null,
       componentes: data.componentes ?? [],
     }
   } catch (err) {

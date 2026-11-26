@@ -36,10 +36,18 @@ export async function listVisitas(idEmpresa) {
     }
     return visitasMock.filter((v) => v.id_empresa === Number(idEmpresa))
   }
+  // El backend filtra por rol (el comercial ve todas; el técnico, solo las
+  // suyas) y NO filtra por empresa: ignora cualquier query param. Mandamos
+  // `id_empresa` por compatibilidad, pero el filtro por empresa es del cliente,
+  // así que lo aplicamos aquí para conservar el contrato que las pantallas
+  // asumen (`listVisitas(idEmpresa)` devuelve solo las de esa empresa).
   const { data } = await apiClient.get('/visitas', {
     params: idEmpresa ? { id_empresa: idEmpresa } : undefined,
   })
-  return data
+  if (idEmpresa == null || idEmpresa === '') {
+    return data
+  }
+  return data.filter((v) => v.id_empresa === Number(idEmpresa))
 }
 
 export async function createVisita({

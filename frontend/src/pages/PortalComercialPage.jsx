@@ -21,8 +21,6 @@ import {
   createPrecotizacion,
   listAccesos,
 } from '../api/precotizaciones'
-import { useAuth } from '../context/auth-context'
-
 const COMPONENTE_NOMBRE = new Map(
   COMPONENTES.map((c) => [c.id_componente, c.nombre]),
 )
@@ -35,8 +33,6 @@ function componentesSugeridos(silla) {
 }
 
 export default function PortalComercialPage() {
-  const { user } = useAuth()
-
   const [empresas, setEmpresas] = useState([])
   const [cargandoEmpresas, setCargandoEmpresas] = useState(true)
   const [errorEmpresas, setErrorEmpresas] = useState('')
@@ -195,9 +191,7 @@ export default function PortalComercialPage() {
     setCreando(true)
     try {
       const precot = await createPrecotizacion({
-        id_empresa: idEmpresaSel,
         id_visita: idVisitaSel,
-        creada_por: user.id_usuario,
         observaciones,
       })
       setExito(`Precotización #${precot.id_precotizacion} creada en borrador.`)
@@ -205,10 +199,14 @@ export default function PortalComercialPage() {
       await recargarPrecotizaciones()
     } catch (err) {
       const status = err.response?.status
-      if (status === 400) {
+      if (status === 400 || status === 422) {
         setErrorCrear(err.response?.data?.detail ?? 'Datos inválidos.')
       } else if (status === 403) {
         setErrorCrear('No tienes permiso para crear precotizaciones.')
+      } else if (status === 404) {
+        setErrorCrear('La visita ya no existe.')
+      } else if (status === 409) {
+        setErrorCrear('La visita ya tiene una precotización activa.')
       } else {
         setErrorCrear('No se pudo crear la precotización. Inténtalo de nuevo.')
       }

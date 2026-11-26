@@ -62,7 +62,26 @@ export async function listSillas(idVisita) {
   const { data } = await apiClient.get('/sillas', {
     params: idVisita ? { id_visita: idVisita } : undefined,
   })
-  return data
+
+  // `SillaOut` no incluye `sugerir_cambio` ni el estado de los componentes (eso
+  // lo expone el checklist, vía `vista_estado_mantenimiento`). Las pantallas
+  // pintan la insignia `sugerir_cambio` y, en el portal comercial, los
+  // componentes a cambiar (DANADO). Por eso enriquecemos cada silla con su
+  // checklist. Es N+1 acotado al número de sillas de la visita (pocas por
+  // levantamiento); si crece, el backend debería devolver ambos en el listado.
+  // Una silla sin checklist aún guardado degrada a `sugerir_cambio=false` y
+  // `componentes=[]` sin romper la lista.
+  const enriquecidas = await Promise.all(
+    data.map(async (silla) => {
+      try {
+        const { items, sugerir_cambio } = await getComponentes(silla.id_silla)
+        return { ...silla, componentes: items ?? [], sugerir_cambio }
+      } catch {
+        return { ...silla, componentes: [], sugerir_cambio: false }
+      }
+    }),
+  )
+  return enriquecidas
 }
 
 export async function createSilla({
@@ -79,9 +98,8 @@ export async function createSilla({
   // Contrato del backend real (POST /visitas/{id_visita}/sillas): solo acepta
   // estos cuatro campos. La empresa, sede y departamento los deduce el servidor
   // del empleado; el codigo_qr/token_publico los genera la BD. El estado de los
-  // componentes y las fotos aún no tienen endpoint (son de otro dev), así que
-  // `componentes` solo alimenta el store del mock; cuando exista ese endpoint se
-  // enviará aparte sin tocar esta pantalla.
+  // componentes se persiste aparte con PUT /sillas/{id}/componentes (ver abajo),
+  // y las fotos con POST /sillas/{id}/fotos; todo tras crear la silla.
   const payload = {
     id_empleado: Number(id_empleado),
     cargo: cargo.trim(),
@@ -114,7 +132,60 @@ export async function createSilla({
     return conDerivados(silla)
   }
 
-  const { data } = await apiClient.post(`/visitas/${Number(id_visita)}/sillas`, payload)
+  // 1) Crea la silla (SillaCreadaOut: id_silla, codigo_qr, token_publico…).
+  const { data: silla } = await apiClient.post(
+    `/visitas/${Number(id_visita)}/sillas`,
+    payload,
+  )
+
+  // 2) Persiste el checklist de componentes. El backend exige el checklist
+  //    COMPLETO (los 5 componentes) con estados válidos y devuelve la
+  //    `sugerir_cambio` ya calculada en la BD, que combinamos en la respuesta
+  //    para que la pantalla muestre la insignia sin recalcular.
+  const checklist = await guardarComponentes(silla.id_silla, componentes)
+
+  return { ...silla, sugerir_cambio: checklist.sugerir_cambio }
+}
+
+/* Guarda el estado de los componentes de una silla (PUT /sillas/{id}/componentes).
+ *
+ * El backend valida que el checklist esté completo (los 5 componentes) y que
+ * cada estado sea uno de ESTADOS_COMPONENTE; responde con los items guardados y
+ * `sugerir_cambio` (según `vista_estado_mantenimiento`). En mock actualiza el
+ * store y recalcula la sugerencia localmente. */
+export async function guardarComponentes(idSilla, componentes) {
+  const items = componentes.map((c) => ({
+    id_componente: c.id_componente,
+    estado: c.estado,
+    observacion: c.observacion?.trim() || null,
+  }))
+
+  if (USE_MOCK.sillas) {
+    const silla = sillasMock.find((s) => s.id_silla === Number(idSilla))
+    if (silla) silla.componentes = items
+    return {
+      id_silla: Number(idSilla),
+      items,
+      sugerir_cambio: calcularSugerirCambio(items),
+    }
+  }
+
+  const { data } = await apiClient.put(`/sillas/${idSilla}/componentes`, { items })
+  return data
+}
+
+/* Lee el checklist de componentes de una silla (GET /sillas/{id}/componentes). */
+export async function getComponentes(idSilla) {
+  if (USE_MOCK.sillas) {
+    const silla = sillasMock.find((s) => s.id_silla === Number(idSilla))
+    const items = silla?.componentes ?? []
+    return {
+      id_silla: Number(idSilla),
+      items,
+      sugerir_cambio: calcularSugerirCambio(items),
+    }
+  }
+  const { data } = await apiClient.get(`/sillas/${idSilla}/componentes`)
   return data
 }
 
@@ -169,13 +240,10 @@ export async function updateSilla(idSilla, cambios) {
 
 /* Subida de fotos de una silla (R8).
  *
- * El backend de sillas (de otro dev) todavía NO expone un endpoint de fotos:
- * registrar_silla solo persiste los datos básicos. Mientras no exista, esto
- * funciona solo en modo mock, generando una URL local temporal
- * (`URL.createObjectURL`) para previsualizar; quien la use debe revocarla al
- * desmontar. Cuando el endpoint real llegue, se ajusta aquí la ruta/forma
- * acordada (p. ej. POST /sillas/{id_silla}/fotos con multipart) sin tocar la
- * pantalla. */
+ * Endpoint real: POST /sillas/{id_silla}/fotos (multipart, campo `archivo`),
+ * una foto por llamada; devuelve `FotografiaOut`. En mock genera una URL local
+ * temporal (`URL.createObjectURL`) para previsualizar; quien la use debe
+ * revocarla al desmontar. */
 const FOTOS_ENDPOINT = (idSilla) => `/sillas/${idSilla}/fotos`
 
 export async function uploadFotoSilla({ id_silla, archivo }) {
@@ -191,10 +259,12 @@ export async function uploadFotoSilla({ id_silla, archivo }) {
     return foto
   }
 
+  // `Content-Type: undefined` deja que el navegador fije el multipart con su
+  // boundary; el default `application/json` del `apiClient` rompería la subida.
   const formData = new FormData()
   formData.append('archivo', archivo)
   const { data } = await apiClient.post(FOTOS_ENDPOINT(id_silla), formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': undefined },
   })
   return data
 }

@@ -66,14 +66,28 @@ export async function createEmpleado({
   return data
 }
 
-/* Importación masiva por Excel (R6).
+/* Importación masiva por Excel (R6 / HU-19).
  *
- * `filas` son los empleados ya validados en la previsualización. El backend
- * inserta lo válido, registra la carga en `carga_excel` (archivo, procesados,
- * con error) y devuelve el resumen. En mock simulamos ese resumen e insertamos
- * en el store para que el listado los refleje.
+ * Dos contratos según el modo:
+ *   - Mock: el frontend ya parseó el `.xlsx` en el navegador y pasa `filas`
+ *     (las válidas de la previsualización). Simulamos el resumen e insertamos
+ *     en el store para que el listado los refleje.
+ *   - Real (`POST /carga-masiva/empleados`): el backend parsea el archivo él
+ *     mismo, así que hay que enviarle el `.xlsx` crudo por `multipart/form-data`
+ *     (campo `archivo`). El `id_empresa` NO se envía: el backend lo deriva del
+ *     `ADMIN_CLIENTE` autenticado (aislamiento estructural). La previsualización
+ *     local sigue siendo solo UX; el conteo autoritativo es el del backend.
+ *
+ * El resumen del backend (`ReporteCargaOut`) trae `total_procesadas`,
+ * `total_aplicadas` y `errores: [{ fila, motivo }]`. Lo normalizamos a la forma
+ * que consume la pantalla (`registros_procesados`, `registros_con_error`).
  */
-export async function importarEmpleadosExcel({ id_empresa, nombre_archivo, filas }) {
+export async function importarEmpleadosExcel({
+  id_empresa,
+  nombre_archivo,
+  filas,
+  archivo,
+}) {
   if (USE_MOCK.empleados) {
     let procesados = 0
     const errores = []
@@ -105,10 +119,21 @@ export async function importarEmpleadosExcel({ id_empresa, nombre_archivo, filas
     }
   }
 
-  const { data } = await apiClient.post('/empleados/importar', {
-    id_empresa: Number(id_empresa),
-    nombre_archivo,
-    filas,
+  // Endpoint real: manda el archivo crudo; el backend parsea y valida.
+  // `Content-Type: undefined` hace que el navegador fije el multipart con su
+  // boundary (el `apiClient` trae un default `application/json` que, de dejarse,
+  // rompería el parseo del archivo en el backend).
+  const formData = new FormData()
+  formData.append('archivo', archivo, archivo?.name ?? nombre_archivo)
+  const { data } = await apiClient.post('/carga-masiva/empleados', formData, {
+    headers: { 'Content-Type': undefined },
   })
-  return data
+
+  // Normaliza el `ReporteCargaOut` a la forma que usa la pantalla.
+  return {
+    nombre_archivo: data.nombre_archivo ?? nombre_archivo,
+    registros_procesados: data.total_aplicadas ?? 0,
+    registros_con_error: data.errores?.length ?? 0,
+    errores: data.errores ?? [],
+  }
 }
