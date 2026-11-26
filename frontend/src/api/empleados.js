@@ -1,29 +1,18 @@
-/* API de empleados del cliente (recurso de otro dev, mockeable).
+/* API de empleados del cliente (backend real, Fase 4 R9).
  *
- * Mismo patrón que `empresas.js`: con `USE_MOCK.empleados` en `true` trabaja
- * sobre un store en memoria; en `false` pega al backend real sin tocar las
- * pantallas. Cubre el alta manual y la importación por Excel (R6): la
- * importación manda las filas ya parseadas por el frontend y el backend las
- * inserta y registra la carga en `carga_excel`.
+ * Alta manual y listado consumen la ruta anidada del catálogo
+ * (`/empresas/{id_empresa}/empleados`), coherente con sedes y departamentos: la
+ * empresa va en la ruta, no en el cuerpo. La importación por Excel (R6) manda
+ * el `.xlsx` crudo a `POST /carga-masiva/empleados`, que parsea, inserta y
+ * registra la carga en `carga_excel`. El interceptor de `apiClient` adjunta el
+ * JWT y el backend impone el RBAC y el aislamiento por empresa; los errores HTTP
+ * se propagan tal cual para que la pantalla los mapee.
  */
 import { apiClient } from './client'
 import { USE_MOCK } from './mocks'
 
-// Store en memoria para el mock, por empresa. Se reinicia al recargar.
-const empleadosMock = []
-let proximoIdMock = 1
-
-function filtrarPorEmpresa(idEmpresa) {
-  return empleadosMock.filter((e) => e.id_empresa === Number(idEmpresa))
-}
-
 export async function listEmpleados(idEmpresa) {
-  if (USE_MOCK.empleados) {
-    return filtrarPorEmpresa(idEmpresa)
-  }
-  const { data } = await apiClient.get('/empleados', {
-    params: { id_empresa: idEmpresa },
-  })
+  const { data } = await apiClient.get(`/empresas/${idEmpresa}/empleados`)
   return data
 }
 
@@ -44,6 +33,13 @@ export async function listEmpleadosEmpresa(idEmpresa) {
   return data
 }
 
+/* Alta manual de un empleado (`POST /empresas/{id_empresa}/empleados`).
+ *
+ * La empresa va en la ruta, no en el cuerpo. `id_sede` e `id_departamento` son
+ * los desplegables encadenados de la pantalla; el backend valida que existan en
+ * la empresa y sean coherentes (400 si no). `nombre` y `cargo` son obligatorios;
+ * `documento` (único por empresa → 409) y `correo` son opcionales y se mandan
+ * como null si vienen vacíos. Devuelve el empleado creado (`EmpleadoOut`). */
 export async function createEmpleado({
   id_empresa,
   id_sede,
@@ -54,7 +50,6 @@ export async function createEmpleado({
   cargo,
 }) {
   const payload = {
-    id_empresa: Number(id_empresa),
     id_sede: Number(id_sede),
     id_departamento: Number(id_departamento),
     nombre: nombre.trim(),
@@ -63,23 +58,10 @@ export async function createEmpleado({
     cargo: cargo.trim(),
   }
 
-  if (USE_MOCK.empleados) {
-    if (
-      payload.documento &&
-      empleadosMock.some(
-        (e) =>
-          e.id_empresa === payload.id_empresa && e.documento === payload.documento,
-      )
-    ) {
-      // UNIQUE (id_empresa, documento) del SQL → 409 en el backend real.
-      throw { response: { status: 409 } }
-    }
-    const empleado = { id_empleado: proximoIdMock++, activo: true, ...payload }
-    empleadosMock.push(empleado)
-    return empleado
-  }
-
-  const { data } = await apiClient.post('/empleados', payload)
+  const { data } = await apiClient.post(
+    `/empresas/${id_empresa}/empleados`,
+    payload,
+  )
   return data
 }
 

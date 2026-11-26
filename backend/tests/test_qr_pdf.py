@@ -29,7 +29,7 @@ def test_pdf_codifica_url_publica(cliente, fabrica, auth):
     silla = fabrica.silla(datos["visita"], datos["empleado"])
 
     assert url_publica_silla(silla) == (
-        f"{settings.frontend_url.rstrip('/')}/silla/{silla.token_publico}"
+        f"{settings.frontend_url.rstrip('/')}/qr/{silla.token_publico}"
     )
 
 

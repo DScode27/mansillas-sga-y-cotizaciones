@@ -292,3 +292,162 @@ def test_admin_cliente_no_crea_departamento_en_otra_empresa(cliente, fabrica, au
     )
 
     assert respuesta.status_code == 403, respuesta.text
+
+
+# --- POST /empresas/{id}/empleados -------------------------------------------
+
+
+def _cuerpo_empleado(sede, departamento, **extra):
+    """Payload base del alta manual (sede/departamento de desplegables)."""
+    cuerpo = {
+        "id_sede": sede.id_sede,
+        "id_departamento": departamento.id_departamento,
+        "nombre": "Ana Pérez",
+        "cargo": "Analista",
+    }
+    cuerpo.update(extra)
+    return cuerpo
+
+
+def test_comercial_crea_empleado(cliente, fabrica, auth):
+    """`COMERCIAL_MANSILLAS` registra un empleado en una empresa (201).
+
+    El `id_empresa` lo deriva el backend del path; `activo` lo fija el SQL.
+    """
+    comercial = fabrica.usuario("COMERCIAL_MANSILLAS")
+    empresa = fabrica.empresa()
+    sede = fabrica.sede(empresa)
+    departamento = fabrica.departamento(empresa, sede)
+
+    respuesta = cliente.post(
+        f"/empresas/{empresa.id_empresa}/empleados",
+        json=_cuerpo_empleado(
+            sede, departamento, documento="123", correo="ana@test.local"
+        ),
+        headers=auth(comercial),
+    )
+
+    assert respuesta.status_code == 201, respuesta.text
+    cuerpo = respuesta.json()
+    assert cuerpo["nombre"] == "Ana Pérez"
+    assert cuerpo["id_empresa"] == empresa.id_empresa
+    assert cuerpo["id_sede"] == sede.id_sede
+    assert cuerpo["id_departamento"] == departamento.id_departamento
+    assert cuerpo["activo"] is True
+    assert "id_empleado" in cuerpo
+
+
+def test_crear_empleado_sede_inexistente_da_400(cliente, fabrica, auth):
+    """Una sede que no existe en la empresa responde 400 (FK compuesta)."""
+    comercial = fabrica.usuario("COMERCIAL_MANSILLAS")
+    empresa = fabrica.empresa()
+    sede = fabrica.sede(empresa)
+    departamento = fabrica.departamento(empresa, sede)
+
+    respuesta = cliente.post(
+        f"/empresas/{empresa.id_empresa}/empleados",
+        json=_cuerpo_empleado(
+            sede, departamento, id_sede=999999
+        ),
+        headers=auth(comercial),
+    )
+
+    assert respuesta.status_code == 400, respuesta.text
+
+
+def test_crear_empleado_departamento_de_otra_sede_da_400(cliente, fabrica, auth):
+    """Un departamento que no cuelga de la sede elegida responde 400."""
+    comercial = fabrica.usuario("COMERCIAL_MANSILLAS")
+    empresa = fabrica.empresa()
+    sede_a = fabrica.sede(empresa)
+    sede_b = fabrica.sede(empresa)
+    dep_de_b = fabrica.departamento(empresa, sede_b)
+
+    respuesta = cliente.post(
+        f"/empresas/{empresa.id_empresa}/empleados",
+        # sede_a + departamento de sede_b: combinación incoherente.
+        json=_cuerpo_empleado(sede_a, dep_de_b),
+        headers=auth(comercial),
+    )
+
+    assert respuesta.status_code == 400, respuesta.text
+
+
+def test_crear_empleado_documento_duplicado_da_409(cliente, fabrica, auth):
+    """Un documento ya usado en la empresa responde 409 (`UNIQUE`)."""
+    comercial = fabrica.usuario("COMERCIAL_MANSILLAS")
+    empresa = fabrica.empresa()
+    sede = fabrica.sede(empresa)
+    departamento = fabrica.departamento(empresa, sede)
+    existente = fabrica.empleado(empresa, sede, departamento)
+
+    respuesta = cliente.post(
+        f"/empresas/{empresa.id_empresa}/empleados",
+        json=_cuerpo_empleado(sede, departamento, documento=existente.documento),
+        headers=auth(comercial),
+    )
+
+    assert respuesta.status_code == 409, respuesta.text
+
+
+def test_admin_cliente_crea_empleado_en_su_empresa(cliente, fabrica, auth):
+    """El `ADMIN_CLIENTE` puede dar de alta un empleado en su propia empresa."""
+    empresa = fabrica.empresa()
+    sede = fabrica.sede(empresa)
+    departamento = fabrica.departamento(empresa, sede)
+    admin = _admin(fabrica, empresa)
+
+    respuesta = cliente.post(
+        f"/empresas/{empresa.id_empresa}/empleados",
+        json=_cuerpo_empleado(sede, departamento),
+        headers=auth(admin),
+    )
+
+    assert respuesta.status_code == 201, respuesta.text
+
+
+def test_admin_cliente_no_crea_empleado_en_otra_empresa(cliente, fabrica, auth):
+    """Aislamiento: el `ADMIN_CLIENTE` recibe 403 ante una empresa ajena."""
+    empresa_propia = fabrica.empresa()
+    empresa_ajena = fabrica.empresa()
+    sede_ajena = fabrica.sede(empresa_ajena)
+    dep_ajeno = fabrica.departamento(empresa_ajena, sede_ajena)
+    admin = _admin(fabrica, empresa_propia)
+
+    respuesta = cliente.post(
+        f"/empresas/{empresa_ajena.id_empresa}/empleados",
+        json=_cuerpo_empleado(sede_ajena, dep_ajeno),
+        headers=auth(admin),
+    )
+
+    assert respuesta.status_code == 403, respuesta.text
+
+
+def test_tecnico_no_crea_empleado_da_403(cliente, fabrica, auth):
+    """Un `TECNICO` no está autorizado para dar de alta empleados."""
+    tecnico = fabrica.usuario("TECNICO")
+    empresa = fabrica.empresa()
+    sede = fabrica.sede(empresa)
+    departamento = fabrica.departamento(empresa, sede)
+
+    respuesta = cliente.post(
+        f"/empresas/{empresa.id_empresa}/empleados",
+        json=_cuerpo_empleado(sede, departamento),
+        headers=auth(tecnico),
+    )
+
+    assert respuesta.status_code == 403, respuesta.text
+
+
+def test_crear_empleado_sin_sesion_da_401(cliente, fabrica):
+    """Sin cabecera de sesión, el alta de empleado responde 401."""
+    empresa = fabrica.empresa()
+    sede = fabrica.sede(empresa)
+    departamento = fabrica.departamento(empresa, sede)
+
+    respuesta = cliente.post(
+        f"/empresas/{empresa.id_empresa}/empleados",
+        json=_cuerpo_empleado(sede, departamento),
+    )
+
+    assert respuesta.status_code == 401, respuesta.text

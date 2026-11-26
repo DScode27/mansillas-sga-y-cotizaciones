@@ -99,8 +99,11 @@ def _token_de(silla: Silla) -> str:
 
 
 def url_publica_silla(silla: Silla) -> str:
-    """Public URL encoded inside the QR: never personal data."""
-    return f"{settings.frontend_url.rstrip('/')}/silla/{_token_de(silla)}"
+    """Public URL encoded inside the QR: never personal data.
+
+    Points to the frontend SPA route (`/qr/:token`), not the backend API path.
+    """
+    return f"{settings.frontend_url.rstrip('/')}/qr/{_token_de(silla)}"
 
 
 def _imagen_qr(silla: Silla) -> BytesIO:
