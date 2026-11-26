@@ -11,10 +11,12 @@ class CodigoVerificacion(Base):
     """One-time verification code (OTP) for a pre-quotation or an employee.
 
     Maps the existing `codigo_verificacion` table unchanged. `id_codigo` is a
-    database identity column (fetched from the server). A CHECK in the schema
-    requires exactly one of `id_precotizacion` / `id_empleado`; this feature
-    always sets `id_precotizacion` and leaves `id_empleado` NULL. Only a hashed
+    database identity column (fetched from the server). Only a hashed
     representation of the code is stored in `codigo_hash`, never the plain OTP.
+    The SQL `CHECK` requires exactly one of `id_precotizacion` / `id_empleado`
+    to be non-null; the database enforces it, so it is not replicated here.
+    Pre-quotation acceptance (HU-15) sets `id_precotizacion`; the employee OTP
+    flow (HU-24) sets `id_empleado`.
     """
 
     __tablename__ = "codigo_verificacion"

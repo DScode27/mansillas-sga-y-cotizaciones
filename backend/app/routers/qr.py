@@ -1,3 +1,4 @@
+from datetime import datetime
 from io import BytesIO
 from typing import Annotated
 
@@ -14,8 +15,19 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
-from app.deps import CurrentUser, get_current_user
+from app.deps import CurrentUser, get_current_user, require_role
 from app.models import Silla, Visita
+from app.routers.sillas import get_silla_by_token
+from app.services import permisos_service, qr_service
+from app.services.email_service import EmailSender, get_email_sender
+from app.services.permisos_service import PermisoInvalido
+from app.services.qr_service import (
+    EmpleadoNoEncontrado,
+    OtpExpiradoOUsado,
+    OtpInvalido,
+    PermisoInsuficiente,
+    SoloAdminCliente,
+)
 
 router = APIRouter(prefix="/qr", tags=["qr"])
 
@@ -27,6 +39,59 @@ QR_SIZE = 4 * cm  # well above the 3 cm x 3 cm minimum
 
 class QrPdfRequest(BaseModel):
     ids: list[int] = []
+
+
+class ConsultaPublicaOut(BaseModel):
+    """Public chair lookup response (HU-17): basic data + owning company's
+    permiso_qr. Never includes the employee's name, document or email."""
+
+    id_silla: int
+    codigo_qr: str
+    estado: str
+    cargo: str
+    permiso_qr: int
+
+
+class PermisoQrOut(BaseModel):
+    """Current QR permission level for a company (HU-18)."""
+
+    id_empresa: int
+    permiso_qr: int
+
+
+class PermisoQrUpdate(BaseModel):
+    """New QR permission level; validated as 1/2/3 in permisos_service (422)."""
+
+    permiso_qr: int
+
+
+class SolicitudOtp(BaseModel):
+    """OTP request body (HU-24): the employee identifies by email or document."""
+
+    correo: str | None = None
+    documento: str | None = None
+
+
+class TicketCreate(BaseModel):
+    """Ticket creation body through the public QR flow (HU-24)."""
+
+    asunto: str
+    descripcion: str
+    correo: str | None = None
+    documento: str | None = None
+    codigo: str
+
+
+class TicketOut(BaseModel):
+    """Public ticket response (HU-24). Never exposes the employee's personal
+    data; only the chair and ticket fields."""
+
+    id_ticket: int
+    id_silla: int
+    asunto: str
+    descripcion: str
+    estado: str
+    fecha_creacion: datetime
 
 
 def _token_de(silla: Silla) -> str:
@@ -131,6 +196,120 @@ def _componer_pdf(sillas: list[Silla]) -> bytes:
     return buffer.getvalue()
 
 
+@router.get("/silla/{token}", response_model=ConsultaPublicaOut)
+def consultar_silla_publica(
+    token: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> ConsultaPublicaOut:
+    """Public chair lookup (HU-17): no `get_current_user`, no auth required.
+
+    Resolves the chair by its public token; an unknown or malformed token
+    yields 404 "QR no válido". Returns only basic chair data plus the owning
+    company's `permiso_qr`, never the employee's personal data.
+    """
+    silla = get_silla_by_token(db, token)
+    if silla is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "QR no válido")
+
+    datos = qr_service.consultar_silla_publica(db, silla)
+    return ConsultaPublicaOut(**datos)
+
+
+@router.post("/silla/{token}/otp", status_code=status.HTTP_204_NO_CONTENT)
+def solicitar_otp_publico(
+    token: str,
+    payload: SolicitudOtp,
+    db: Annotated[Session, Depends(get_db)],
+    sender: Annotated[EmailSender, Depends(get_email_sender)],
+) -> Response:
+    """Solicitud pública de OTP (HU-24): no `get_current_user`, sin auth.
+
+    Resuelve la silla por su token público; un token desconocido o mal formado
+    responde 404 "QR no válido". Delega en `qr_service.solicitar_otp`, que
+    identifica al empleado por `correo` o `documento` dentro de la empresa dueña
+    de la silla y le envía el OTP; si no hay empleado que coincida, se traduce a
+    404 "Empleado no encontrado". Responde 204 sin cuerpo al emitir el OTP.
+    """
+    silla = get_silla_by_token(db, token)
+    if silla is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "QR no válido")
+
+    try:
+        qr_service.solicitar_otp(
+            db,
+            silla=silla,
+            correo=payload.correo,
+            documento=payload.documento,
+            sender=sender,
+        )
+    except EmpleadoNoEncontrado:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Empleado no encontrado")
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/silla/{token}/ticket",
+    response_model=TicketOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def crear_ticket_publico(
+    token: str,
+    payload: TicketCreate,
+    db: Annotated[Session, Depends(get_db)],
+) -> TicketOut:
+    """Creación pública de ticket por QR (HU-24): no `get_current_user`, sin auth.
+
+    Resuelve la silla por su token público; un token desconocido o mal formado
+    responde 404 "QR no válido". Delega en `qr_service.crear_ticket_por_qr`, que
+    aplica el `permiso_qr` de la empresa dueña, valida el OTP del empleado y crea
+    el ticket. Traduce las excepciones de dominio a HTTP:
+    `EmpleadoNoEncontrado` → 404 "Empleado no encontrado",
+    `PermisoInsuficiente` → 403 "Permiso insuficiente", `SoloAdminCliente` → 403
+    "Solo el administrador del cliente puede crear tickets", `OtpInvalido` → 400
+    "OTP inválido", `OtpExpiradoOUsado` → 400 "OTP expirado o ya utilizado".
+    Responde 201 con el `TicketOut`.
+    """
+    silla = get_silla_by_token(db, token)
+    if silla is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "QR no válido")
+
+    try:
+        ticket = qr_service.crear_ticket_por_qr(
+            db,
+            silla=silla,
+            correo=payload.correo,
+            documento=payload.documento,
+            codigo=payload.codigo,
+            asunto=payload.asunto,
+            descripcion=payload.descripcion,
+        )
+    except EmpleadoNoEncontrado:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Empleado no encontrado")
+    except PermisoInsuficiente:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Permiso insuficiente")
+    except SoloAdminCliente:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Solo el administrador del cliente puede crear tickets",
+        )
+    except OtpInvalido:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "OTP inválido")
+    except OtpExpiradoOUsado:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "OTP expirado o ya utilizado"
+        )
+
+    return TicketOut(
+        id_ticket=ticket.id_ticket,
+        id_silla=ticket.id_silla,
+        asunto=ticket.asunto,
+        descripcion=ticket.descripcion,
+        estado=ticket.estado,
+        fecha_creacion=ticket.fecha_creacion,
+    )
+
+
 @router.post("/pdf")
 def descargar_pdf(
     payload: QrPdfRequest,
@@ -154,3 +333,64 @@ def descargar_pdf(
             "Content-Disposition": 'attachment; filename="qr_sillas.pdf"',
         },
     )
+
+
+def _autorizar_empresa(user: CurrentUser, id_empresa: int) -> None:
+    """Aislamiento multiempresa (HU-18, RN-6).
+
+    `require_role("ADMIN_CLIENTE")` ya garantiza el rol (403 "Rol no autorizado"
+    si no coincide). Aquí comprobamos que el `ADMIN_CLIENTE` solo opere sobre su
+    propia empresa: si `user.empresa_id` difiere de `id_empresa`, 403.
+    """
+    if user.empresa_id != id_empresa:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "No autorizado para esta empresa",
+        )
+
+
+@router.get("/empresas/{id_empresa}/permiso-qr", response_model=PermisoQrOut)
+def obtener_permiso_qr(
+    id_empresa: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[CurrentUser, Depends(require_role("ADMIN_CLIENTE"))],
+) -> PermisoQrOut:
+    """Lee `empresa.permiso_qr` de la empresa del `ADMIN_CLIENTE` (HU-18).
+
+    Ruta resultante: `/qr/empresas/{id_empresa}/permiso-qr` (el router lleva el
+    prefijo `/qr`; no se modifica `app/main.py`). Exige rol `ADMIN_CLIENTE`
+    (`require_role` → 403 "Rol no autorizado") y que la empresa objetivo sea la
+    del usuario (`_autorizar_empresa` → 403 "No autorizado para esta empresa").
+    """
+    _autorizar_empresa(user, id_empresa)
+    permiso = permisos_service.obtener_permiso_qr(db, id_empresa=id_empresa)
+    return PermisoQrOut(id_empresa=id_empresa, permiso_qr=permiso)
+
+
+@router.put("/empresas/{id_empresa}/permiso-qr", response_model=PermisoQrOut)
+def actualizar_permiso_qr(
+    id_empresa: int,
+    payload: PermisoQrUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[CurrentUser, Depends(require_role("ADMIN_CLIENTE"))],
+) -> PermisoQrOut:
+    """Actualiza `empresa.permiso_qr` de la empresa del `ADMIN_CLIENTE` (HU-18).
+
+    Ruta resultante: `/qr/empresas/{id_empresa}/permiso-qr` (prefijo `/qr` del
+    router; sin tocar `app/main.py`). Mismo RBAC que el GET. Delega en
+    `permisos_service.actualizar_permiso_qr`, que valida el nivel 1/2/3; un valor
+    fuera de ese conjunto lanza `PermisoInvalido`, traducido a 422 "permiso_qr
+    debe ser 1, 2 o 3".
+    """
+    _autorizar_empresa(user, id_empresa)
+    try:
+        permiso = permisos_service.actualizar_permiso_qr(
+            db, id_empresa=id_empresa, permiso=payload.permiso_qr
+        )
+    except PermisoInvalido:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "permiso_qr debe ser 1, 2 o 3",
+        )
+
+    return PermisoQrOut(id_empresa=id_empresa, permiso_qr=permiso)

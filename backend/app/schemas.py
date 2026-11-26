@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # Los 4 roles del SQL. Se usan para validar la entrada de gestión de usuarios.
 Rol = Literal["COMERCIAL_MANSILLAS", "TECNICO", "ADMIN_CLIENTE", "EMPLEADO_CLIENTE"]
@@ -69,3 +69,54 @@ class RolUpdate(BaseModel):
     # Igual que en el alta: necesario si el nuevo rol es de cliente, nulo si es
     # interno. El service valida la combinación.
     id_empresa: int | None = None
+
+# --- Carga masiva de empleados (HU-19, R3) ---------------------------------
+
+class ErrorFila(BaseModel):
+    """Fila rechazada de una carga masiva: número de fila y motivo (R3.2).
+
+    `fila` es 1-based sobre las filas de datos del archivo, coherente con el
+    `ErrorFila` que arma el service (`carga_excel_service`). `from_attributes`
+    permite adaptarlo desde el dataclass del service, también cuando viaja
+    anidado dentro de `ReporteCargaOut`.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    fila: int
+    motivo: str
+
+
+class ReporteCargaOut(BaseModel):
+    """Reporte_Resultado de una carga masiva (R3.4).
+
+    Adapta el `ReporteResultado` (dataclass) que devuelve el service: el router
+    hace `ReporteCargaOut.model_validate(resultado)` gracias a `from_attributes`,
+    ya que los nombres de campo coinciden con los del dataclass.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    nombre_archivo: str
+    total_procesadas: int
+    total_aplicadas: int
+    errores: list[ErrorFila]
+
+
+# --- Inventario de sillas (HU-11, R6) --------------------------------------
+
+class InventarioItemOut(BaseModel):
+    """Ítem del Inventario: una silla con sus datos de contexto (R6.1).
+
+    Columnas devueltas por `inventario_export_service.consultar_inventario`
+    (silla unida a empresa/sede/departamento/empleado).
+    """
+
+    id_silla: int
+    empresa: str
+    sede: str
+    departamento: str
+    empleado: str
+    cargo: str
+    codigo_qr: str
+    estado: str

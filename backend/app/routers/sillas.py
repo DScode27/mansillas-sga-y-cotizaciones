@@ -17,6 +17,14 @@ from app.deps import (
 )
 from app.models import Empleado, Silla, Visita
 from app.services import precotizacion_rules
+from app.services.componentes_service import (
+    ChecklistIncompleto,
+    ComponenteDesconocido,
+    EstadoInvalido,
+    guardar_checklist,
+    obtener_checklist,
+    obtener_sugerencia,
+)
 
 router = APIRouter(tags=["sillas"])
 
@@ -108,6 +116,31 @@ class SillaOut(BaseModel):
     observaciones: str | None
     estado: str
     fecha_registro: datetime
+
+
+class ComponenteItemIn(BaseModel):
+    id_componente: int
+    estado: str
+    observacion: str | None = None
+
+
+class ChecklistIn(BaseModel):
+    items: list[ComponenteItemIn]
+
+
+class ComponenteItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_componente: int
+    nombre: str
+    estado: str
+    observacion: str | None
+
+
+class ChecklistOut(BaseModel):
+    id_silla: int
+    items: list[ComponenteItemOut]
+    sugerir_cambio: bool
 
 
 def _normalizar_texto(valor: str | None) -> str | None:
@@ -374,3 +407,45 @@ def actualizar_silla_comercial(
 
     db.refresh(silla)
     return silla
+
+
+@router.put("/sillas/{id_silla}/componentes", response_model=ChecklistOut)
+def guardar_componentes(
+    id_silla: int,
+    payload: ChecklistIn,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[CurrentUser, Depends(require_role("TECNICO"))],
+) -> ChecklistOut:
+    silla = _cargar_silla(db, id_silla)
+    _autorizar_silla(db, user, silla)
+
+    items = [item.model_dump() for item in payload.items]
+    try:
+        checklist = guardar_checklist(db, id_silla, items)
+    except ComponenteDesconocido as error:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from None
+    except (EstadoInvalido, ChecklistIncompleto) as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from None
+
+    return ChecklistOut(
+        id_silla=id_silla,
+        items=[ComponenteItemOut.model_validate(fila) for fila in checklist],
+        sugerir_cambio=obtener_sugerencia(db, id_silla),
+    )
+
+
+@router.get("/sillas/{id_silla}/componentes", response_model=ChecklistOut)
+def leer_componentes(
+    id_silla: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> ChecklistOut:
+    silla = _cargar_silla(db, id_silla)
+    _autorizar_silla(db, user, silla)
+
+    checklist = obtener_checklist(db, id_silla)
+    return ChecklistOut(
+        id_silla=id_silla,
+        items=[ComponenteItemOut.model_validate(fila) for fila in checklist],
+        sugerir_cambio=obtener_sugerencia(db, id_silla),
+    )

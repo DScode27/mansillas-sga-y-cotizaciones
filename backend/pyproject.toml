@@ -17,11 +17,13 @@ dependencies = [
     "sqlalchemy>=2.0.36",
     "supabase>=2.34.1",
     "user-agents>=2.2.0",
+    "openpyxl>=3.1.5",
 ]
 
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "hypothesis>=6.112.0",
     "pytest>=8.3.4",
 ]
 

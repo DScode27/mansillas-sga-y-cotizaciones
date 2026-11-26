@@ -64,9 +64,10 @@ class Settings(BaseSettings):
     supabase_key: str = ""
     supabase_schema: str = "mansillas"
 
-    # SMTP for the pre-quotation link email (HU-13). No credentials in source;
-    # all come from the environment. Missing config does not stop the app; a
-    # send attempt without enough config returns a controlled error.
+    # SMTP for outbound email. Shared by the pre-quotation link (HU-13) and OTP
+    # delivery (HU-24). No credentials in source; all come from the environment.
+    # Missing config does not stop the app; a send attempt without enough config
+    # returns a controlled error (empty host => development log sender for OTP).
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""
@@ -84,6 +85,10 @@ class Settings(BaseSettings):
     # are fixed, documented MVP constants and live in `app/services/otp.py`
     # (not env-overridable).
     otp_secret: str = ""
+
+    # OTP parameters for public QR tickets (HU-24).
+    otp_ttl_minutes: int = 10
+    otp_length: int = 6
 
     @property
     def smtp_configurado(self) -> bool:

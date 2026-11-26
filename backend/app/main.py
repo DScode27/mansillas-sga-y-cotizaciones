@@ -11,7 +11,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import accesos, auth, fotos, precotizaciones, qr, sillas, usuarios, visitas
+from app.routers import (
+    accesos,
+    auth,
+    carga_excel,
+    fotos,
+    inventario,
+    precotizaciones,
+    qr,
+    sillas,
+    usuarios,
+    visitas,
+)
 
 app = FastAPI(
     title=settings.app_name,
@@ -36,6 +47,8 @@ app.include_router(fotos.router)
 app.include_router(precotizaciones.router)
 app.include_router(qr.router)
 app.include_router(accesos.router)
+app.include_router(carga_excel.router)
+app.include_router(inventario.router)
 
 
 @app.get("/")
