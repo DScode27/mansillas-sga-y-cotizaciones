@@ -13,7 +13,24 @@
  */
 import { useEffect, useState } from 'react'
 import { listMisSillas, listMisPrecotizaciones } from '../api/portal-cliente'
+import { getPermisoQr, setPermisoQr } from '../api/permisos-qr'
 import { useAuth } from '../context/auth-context'
+
+// Opciones de permiso QR con etiqueta legible (RF-18, R2). El valor es el entero
+// que el backend espera (1/2/3); la etiqueta a/b/c es la que ve el admin.
+const OPCIONES_PERMISO_QR = [
+  { valor: 1, etiqueta: '(a) Solo consulta' },
+  { valor: 2, etiqueta: '(b) Consulta y envío de tickets' },
+  { valor: 3, etiqueta: '(c) Tickets solo por el administrador' },
+]
+
+// Mensaje legible por código HTTP al guardar el permiso QR (RF-18, R4). El
+// cuerpo crudo del backend nunca se muestra al usuario.
+function mensajeErrorPermisoQr(status) {
+  if (status === 422) return 'El nivel debe ser uno de los tres valores (a, b o c).'
+  if (status === 403) return 'No tienes permiso para configurar esta empresa.'
+  return 'No se pudo guardar el nivel de permiso. Inténtalo de nuevo.'
+}
 
 export default function PortalClientePage() {
   const { user } = useAuth()
@@ -26,6 +43,17 @@ export default function PortalClientePage() {
   const [precotizaciones, setPrecotizaciones] = useState([])
   const [cargandoPrecot, setCargandoPrecot] = useState(true)
   const [errorPrecot, setErrorPrecot] = useState('')
+
+  // Permiso QR (RF-18): única acción de escritura del admin cliente. `nivel` es
+  // el nivel actualmente guardado; `seleccion` el elegido en el selector (puede
+  // diferir antes de guardar). Estados independientes de carga/guardado/éxito/
+  // error para esta sección.
+  const [nivelPermiso, setNivelPermiso] = useState(null)
+  const [seleccionPermiso, setSeleccionPermiso] = useState('')
+  const [cargandoPermiso, setCargandoPermiso] = useState(true)
+  const [guardandoPermiso, setGuardandoPermiso] = useState(false)
+  const [errorPermiso, setErrorPermiso] = useState('')
+  const [exitoPermiso, setExitoPermiso] = useState('')
 
   async function cargarSillas() {
     setCargandoSillas(true)
@@ -51,22 +79,67 @@ export default function PortalClientePage() {
     }
   }
 
-  // Carga inicial de ambos listados. Las dos piden en paralelo y cada una
-  // resuelve su propio estado de carga/error.
+  async function cargarPermiso() {
+    setCargandoPermiso(true)
+    setErrorPermiso('')
+    setExitoPermiso('')
+    try {
+      const nivel = await getPermisoQr(idEmpresa)
+      setNivelPermiso(nivel)
+      setSeleccionPermiso(String(nivel))
+    } catch (err) {
+      setErrorPermiso(mensajeErrorPermisoQr(err.response?.status))
+    } finally {
+      setCargandoPermiso(false)
+    }
+  }
+
+  // Guarda el nivel elegido (RF-18, R3). Tras el éxito, fija el nuevo nivel
+  // actual y confirma el guardado. El error se mapea por código HTTP (422/403).
+  async function handleGuardarPermiso(event) {
+    event.preventDefault()
+    setErrorPermiso('')
+    setExitoPermiso('')
+    setGuardandoPermiso(true)
+    try {
+      const nivel = await setPermisoQr(idEmpresa, Number(seleccionPermiso))
+      setNivelPermiso(nivel)
+      setSeleccionPermiso(String(nivel))
+      const opcion = OPCIONES_PERMISO_QR.find((o) => o.valor === nivel)
+      setExitoPermiso(`Nivel guardado: ${opcion?.etiqueta ?? nivel}.`)
+    } catch (err) {
+      setErrorPermiso(mensajeErrorPermisoQr(err.response?.status))
+    } finally {
+      setGuardandoPermiso(false)
+    }
+  }
+
+  // Carga inicial de ambos listados y del nivel de permiso QR. Las tres piden en
+  // paralelo y cada una resuelve su propio estado de carga/error.
   useEffect(() => {
     let vigente = true
     Promise.allSettled([
       listMisSillas(idEmpresa),
       listMisPrecotizaciones(idEmpresa),
+      getPermisoQr(idEmpresa),
     ]).then((resultados) => {
       if (!vigente) return
-      const [resSillas, resPrecot] = resultados
+      const [resSillas, resPrecot, resPermiso] = resultados
       if (resSillas.status === 'fulfilled') setSillas(resSillas.value)
       else setErrorSillas('No se pudieron cargar tus sillas.')
       if (resPrecot.status === 'fulfilled') setPrecotizaciones(resPrecot.value)
       else setErrorPrecot('No se pudieron cargar tus precotizaciones.')
+      if (resPermiso.status === 'fulfilled') {
+        setNivelPermiso(resPermiso.value)
+        setSeleccionPermiso(String(resPermiso.value))
+      } else {
+        setErrorPermiso(
+          mensajeErrorPermisoQr(resPermiso.reason?.response?.status),
+        )
+      }
       setCargandoSillas(false)
       setCargandoPrecot(false)
+      setCargandoPermiso(false)
     })
     return () => {
       vigente = false
@@ -81,6 +154,78 @@ export default function PortalClientePage() {
           Consulta de solo lectura de las sillas levantadas y las
           precotizaciones de tu empresa.
         </p>
+      </section>
+
+      <section className="card">
+        <h2>Permisos de acceso por QR</h2>
+        <p className="state-text">
+          Elige con qué nivel acceden tus empleados al escanear el QR de sus
+          sillas. Es la única configuración editable de tu portal.
+        </p>
+
+        {cargandoPermiso && <p className="state-text">Cargando nivel…</p>}
+
+        {!cargandoPermiso && errorPermiso && nivelPermiso == null && (
+          <div className="state-error" role="alert">
+            <p>{errorPermiso}</p>
+            <button
+              className="btn btn--ghost"
+              type="button"
+              onClick={cargarPermiso}
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        {!cargandoPermiso && nivelPermiso != null && (
+          <form className="form-grid" onSubmit={handleGuardarPermiso}>
+            <label className="form-field">
+              <span className="form-field__label">Nivel de permiso QR</span>
+              <select
+                className="form-field__input"
+                value={seleccionPermiso}
+                onChange={(e) => {
+                  setSeleccionPermiso(e.target.value)
+                  setErrorPermiso('')
+                  setExitoPermiso('')
+                }}
+                disabled={guardandoPermiso}
+              >
+                {OPCIONES_PERMISO_QR.map((o) => (
+                  <option key={o.valor} value={o.valor}>
+                    {o.etiqueta}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {errorPermiso && (
+              <p className="form-error" role="alert">
+                {errorPermiso}
+              </p>
+            )}
+
+            {exitoPermiso && (
+              <p className="form-success" role="status">
+                {exitoPermiso}
+              </p>
+            )}
+
+            <div className="form-actions">
+              <button
+                className="btn"
+                type="submit"
+                disabled={
+                  guardandoPermiso ||
+                  Number(seleccionPermiso) === nivelPermiso
+                }
+              >
+                {guardandoPermiso ? 'Guardando…' : 'Guardar nivel'}
+              </button>
+            </div>
+          </form>
+        )}
       </section>
 
       <section className="card">
