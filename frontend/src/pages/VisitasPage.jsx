@@ -23,6 +23,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listEmpresas } from '../api/empresas'
 import { listUsuarios } from '../api/usuarios'
+import { listSedes } from '../api/sedes'
 import { listVisitas, createVisita, updateVisita, deleteVisita } from '../api/visitas'
 import { ROLES } from '../auth/roles'
 import { useAuth } from '../context/auth-context'
@@ -61,6 +62,12 @@ export default function VisitasPage() {
 
   const [tecnicos, setTecnicos] = useState([])
   const [tecnicosDisponibles, setTecnicosDisponibles] = useState(true)
+
+  // Sedes de la empresa elegida, para el selector por nombre del alta (RF-01).
+  // Si el listado falla, se degrada a input de ID (como los técnicos).
+  const [sedes, setSedes] = useState([])
+  const [sedesDisponibles, setSedesDisponibles] = useState(true)
+  const [cargandoSedes, setCargandoSedes] = useState(false)
 
   const [visitas, setVisitas] = useState([])
   const [cargandoVisitas, setCargandoVisitas] = useState(false)
@@ -118,6 +125,41 @@ export default function VisitasPage() {
   // El listado se muestra cuando hay una empresa elegida o cuando es técnico
   // (que ve sus visitas sin elegir empresa, RF-01).
   const mostrarListado = esTecnico || Boolean(idEmpresaSel)
+
+  // Sedes de la empresa elegida para el selector por nombre del alta. Solo se
+  // cargan para quien puede crear visitas y con una empresa elegida; al cambiar
+  // de empresa se limpia la sede del formulario para no arrastrar una ajena. Si
+  // el listado falla, se marca no disponible y la UI cae a input de ID.
+  useEffect(() => {
+    let vigente = true
+    // Los setState van dentro del flujo asíncrono (como el resto de efectos de
+    // esta pantalla) para no disparar renders en cascada desde el efecto.
+    Promise.resolve()
+      .then(() => {
+        if (!vigente) return null
+        setSedes([])
+        setSedesDisponibles(true)
+        setForm((prev) => ({ ...prev, id_sede: '' }))
+        if (!puedeCrear || !idEmpresaSel) {
+          setCargandoSedes(false)
+          return null
+        }
+        setCargandoSedes(true)
+        return listSedes(idEmpresaSel)
+      })
+      .then((data) => {
+        if (vigente && data) setSedes(data)
+      })
+      .catch(() => {
+        if (vigente) setSedesDisponibles(false)
+      })
+      .finally(() => {
+        if (vigente && puedeCrear && idEmpresaSel) setCargandoSedes(false)
+      })
+    return () => {
+      vigente = false
+    }
+  }, [puedeCrear, idEmpresaSel])
 
   async function cargarVisitas() {
     if (!mostrarListado) {
@@ -307,16 +349,38 @@ export default function VisitasPage() {
           <h2>Programar visita</h2>
           <form className="form-grid" onSubmit={handleSubmit}>
             <label className="form-field">
-              <span className="form-field__label">ID de sede</span>
-              <input
-                className="form-field__input"
-                type="number"
-                min={1}
-                value={form.id_sede}
-                onChange={(e) => actualizarCampo('id_sede', e.target.value)}
-                required
-                disabled={enviando}
-              />
+              <span className="form-field__label">Sede</span>
+              {cargandoSedes ? (
+                <span className="state-text">Cargando sedes…</span>
+              ) : sedesDisponibles ? (
+                <select
+                  className="form-field__input"
+                  value={form.id_sede}
+                  onChange={(e) => actualizarCampo('id_sede', e.target.value)}
+                  required
+                  disabled={enviando || sedes.length === 0}
+                >
+                  <option value="">
+                    {sedes.length === 0 ? '— Sin sedes —' : '— Seleccionar —'}
+                  </option>
+                  {sedes.map((s) => (
+                    <option key={s.id_sede} value={s.id_sede}>
+                      {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="form-field__input"
+                  type="number"
+                  min={1}
+                  value={form.id_sede}
+                  onChange={(e) => actualizarCampo('id_sede', e.target.value)}
+                  required
+                  disabled={enviando}
+                  placeholder="ID de sede"
+                />
+              )}
             </label>
 
             <label className="form-field">
@@ -384,6 +448,12 @@ export default function VisitasPage() {
                 disabled={enviando}
               />
             </label>
+
+            {!sedesDisponibles && (
+              <p className="form-notice" role="status">
+                No se pudo cargar la lista de sedes; ingresa el ID de la sede.
+              </p>
+            )}
 
             {!tecnicosDisponibles && (
               <p className="form-notice" role="status">

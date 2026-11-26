@@ -18,6 +18,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listEmpresas } from '../api/empresas'
 import { listVisitas } from '../api/visitas'
+import { listSedes } from '../api/sedes'
+import { listDepartamentos } from '../api/departamentos'
+import { listEmpleadosEmpresa } from '../api/empleados'
 import {
   COMPONENTES,
   ESTADOS_COMPONENTE,
@@ -98,6 +101,30 @@ export default function LevantamientoPage() {
 
   const idEmpresaSel = empresaSel ? Number(empresaSel) : null
   const idVisitaSel = visitaSel ? Number(visitaSel) : null
+
+  // Empresa de contexto para poblar los selectores por nombre (RF-01/03/06).
+  // El comercial la elige explícitamente; el técnico no (RF-01), así que se
+  // deriva de la visita elegida (el backend ya devuelve `id_empresa`).
+  const visitaSeleccionada = useMemo(
+    () => visitas.find((v) => v.id_visita === idVisitaSel) ?? null,
+    [visitas, idVisitaSel],
+  )
+  const idEmpresaContexto = idEmpresaSel ?? visitaSeleccionada?.id_empresa ?? null
+
+  // Catálogos para los selectores encadenados. Cada uno tiene su propio estado
+  // de carga/error; si un listado falla se degrada a input de ID (como el
+  // selector de técnicos de VisitasPage), sin bloquear el registro.
+  const [sedes, setSedes] = useState([])
+  const [sedesDisponibles, setSedesDisponibles] = useState(true)
+  const [cargandoSedes, setCargandoSedes] = useState(false)
+
+  const [empleados, setEmpleados] = useState([])
+  const [empleadosDisponibles, setEmpleadosDisponibles] = useState(true)
+  const [cargandoEmpleados, setCargandoEmpleados] = useState(false)
+
+  const [departamentos, setDepartamentos] = useState([])
+  const [departamentosDisponibles, setDepartamentosDisponibles] = useState(true)
+  const [cargandoDepartamentos, setCargandoDepartamentos] = useState(false)
 
   // Empresas para el selector (mock conmutable). El técnico no usa el selector
   // de empresa (RF-01), así que ni se cargan.
@@ -182,6 +209,89 @@ export default function LevantamientoPage() {
     }
   }, [idVisitaSel])
 
+  // Carga sedes y empleados de la empresa de contexto (encadenado empresa →
+  // sedes/empleados, RF-01/03/06). Si un listado falla, se marca como no
+  // disponible para degradar a input de ID. El `id_sede` elegido se limpia al
+  // cambiar de empresa para no arrastrar una sede de otra empresa.
+  useEffect(() => {
+    let vigente = true
+    // Los setState van dentro del flujo asíncrono (como el resto de efectos de
+    // esta pantalla) para no disparar renders en cascada desde el efecto.
+    Promise.resolve()
+      .then(() => {
+        if (!vigente) return
+        setSedes([])
+        setSedesDisponibles(true)
+        setEmpleados([])
+        setEmpleadosDisponibles(true)
+        if (!idEmpresaContexto) {
+          setCargandoSedes(false)
+          setCargandoEmpleados(false)
+          return
+        }
+        setCargandoSedes(true)
+        setCargandoEmpleados(true)
+        listSedes(idEmpresaContexto)
+          .then((data) => {
+            if (vigente) setSedes(data)
+          })
+          .catch(() => {
+            if (vigente) setSedesDisponibles(false)
+          })
+          .finally(() => {
+            if (vigente) setCargandoSedes(false)
+          })
+        listEmpleadosEmpresa(idEmpresaContexto)
+          .then((data) => {
+            if (vigente) setEmpleados(data)
+          })
+          .catch(() => {
+            if (vigente) setEmpleadosDisponibles(false)
+          })
+          .finally(() => {
+            if (vigente) setCargandoEmpleados(false)
+          })
+      })
+    return () => {
+      vigente = false
+    }
+  }, [idEmpresaContexto])
+
+  // Carga los departamentos de la sede elegida (encadenado sede →
+  // departamentos). Sin sede elegida el selector de departamento queda vacío.
+  const idSedeForm = form.id_sede ? Number(form.id_sede) : null
+  useEffect(() => {
+    let vigente = true
+    Promise.resolve()
+      .then(() => {
+        if (!vigente) return null
+        setDepartamentos([])
+        setDepartamentosDisponibles(true)
+        // Solo encadenamos cuando el selector de sede por nombre está activo (si
+        // se degradó a input de ID, el departamento también va por ID).
+        if (!sedesDisponibles || !idSedeForm) {
+          setCargandoDepartamentos(false)
+          return null
+        }
+        setCargandoDepartamentos(true)
+        return listDepartamentos(idSedeForm)
+      })
+      .then((data) => {
+        if (vigente && data) setDepartamentos(data)
+      })
+      .catch(() => {
+        if (vigente) setDepartamentosDisponibles(false)
+      })
+      .finally(() => {
+        if (vigente && sedesDisponibles && idSedeForm) {
+          setCargandoDepartamentos(false)
+        }
+      })
+    return () => {
+      vigente = false
+    }
+  }, [idSedeForm, sedesDisponibles])
+
   async function recargarSillas() {
     if (!idVisitaSel) return
     setCargandoSillas(true)
@@ -212,6 +322,12 @@ export default function LevantamientoPage() {
 
   function actualizarCampo(campo, valor) {
     setForm((prev) => ({ ...prev, [campo]: valor }))
+  }
+
+  // Al cambiar la sede se limpia el departamento elegido: el encadenado sede →
+  // departamentos recarga la lista y una sede nueva no comparte departamentos.
+  function actualizarSede(valor) {
+    setForm((prev) => ({ ...prev, id_sede: valor, id_departamento: '' }))
   }
 
   function actualizarComponente(idComponente, cambios) {
@@ -382,42 +498,115 @@ export default function LevantamientoPage() {
           <h2>Registrar silla</h2>
           <form className="form-grid" onSubmit={handleSubmit}>
             <label className="form-field">
-              <span className="form-field__label">ID de sede</span>
-              <input
-                className="form-field__input"
-                type="number"
-                min={1}
-                value={form.id_sede}
-                onChange={(e) => actualizarCampo('id_sede', e.target.value)}
-                required
-                disabled={enviando}
-              />
+              <span className="form-field__label">Sede</span>
+              {cargandoSedes ? (
+                <span className="state-text">Cargando sedes…</span>
+              ) : sedesDisponibles ? (
+                <select
+                  className="form-field__input"
+                  value={form.id_sede}
+                  onChange={(e) => actualizarSede(e.target.value)}
+                  required
+                  disabled={enviando || sedes.length === 0}
+                >
+                  <option value="">
+                    {sedes.length === 0 ? '— Sin sedes —' : '— Seleccionar —'}
+                  </option>
+                  {sedes.map((s) => (
+                    <option key={s.id_sede} value={s.id_sede}>
+                      {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="form-field__input"
+                  type="number"
+                  min={1}
+                  value={form.id_sede}
+                  onChange={(e) => actualizarSede(e.target.value)}
+                  required
+                  disabled={enviando}
+                  placeholder="ID de sede"
+                />
+              )}
             </label>
 
             <label className="form-field">
-              <span className="form-field__label">ID de departamento</span>
-              <input
-                className="form-field__input"
-                type="number"
-                min={1}
-                value={form.id_departamento}
-                onChange={(e) => actualizarCampo('id_departamento', e.target.value)}
-                required
-                disabled={enviando}
-              />
+              <span className="form-field__label">Departamento</span>
+              {sedesDisponibles && departamentosDisponibles ? (
+                cargandoDepartamentos ? (
+                  <span className="state-text">Cargando departamentos…</span>
+                ) : (
+                  <select
+                    className="form-field__input"
+                    value={form.id_departamento}
+                    onChange={(e) => actualizarCampo('id_departamento', e.target.value)}
+                    required
+                    disabled={enviando || !form.id_sede || departamentos.length === 0}
+                  >
+                    <option value="">
+                      {!form.id_sede
+                        ? '— Elige una sede primero —'
+                        : departamentos.length === 0
+                          ? '— Sin departamentos —'
+                          : '— Seleccionar —'}
+                    </option>
+                    {departamentos.map((d) => (
+                      <option key={d.id_departamento} value={d.id_departamento}>
+                        {d.nombre}
+                      </option>
+                    ))}
+                  </select>
+                )
+              ) : (
+                <input
+                  className="form-field__input"
+                  type="number"
+                  min={1}
+                  value={form.id_departamento}
+                  onChange={(e) => actualizarCampo('id_departamento', e.target.value)}
+                  required
+                  disabled={enviando}
+                  placeholder="ID de departamento"
+                />
+              )}
             </label>
 
             <label className="form-field">
-              <span className="form-field__label">ID de empleado</span>
-              <input
-                className="form-field__input"
-                type="number"
-                min={1}
-                value={form.id_empleado}
-                onChange={(e) => actualizarCampo('id_empleado', e.target.value)}
-                required
-                disabled={enviando}
-              />
+              <span className="form-field__label">Empleado</span>
+              {cargandoEmpleados ? (
+                <span className="state-text">Cargando empleados…</span>
+              ) : empleadosDisponibles ? (
+                <select
+                  className="form-field__input"
+                  value={form.id_empleado}
+                  onChange={(e) => actualizarCampo('id_empleado', e.target.value)}
+                  required
+                  disabled={enviando || empleados.length === 0}
+                >
+                  <option value="">
+                    {empleados.length === 0 ? '— Sin empleados —' : '— Seleccionar —'}
+                  </option>
+                  {empleados.map((emp) => (
+                    <option key={emp.id_empleado} value={emp.id_empleado}>
+                      {emp.nombre}
+                      {emp.cargo ? ` · ${emp.cargo}` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="form-field__input"
+                  type="number"
+                  min={1}
+                  value={form.id_empleado}
+                  onChange={(e) => actualizarCampo('id_empleado', e.target.value)}
+                  required
+                  disabled={enviando}
+                  placeholder="ID de empleado"
+                />
+              )}
             </label>
 
             <label className="form-field">
@@ -529,6 +718,12 @@ export default function LevantamientoPage() {
                 </ul>
               )}
             </div>
+
+            {(!sedesDisponibles || !empleadosDisponibles || !departamentosDisponibles) && (
+              <p className="form-notice" role="status" style={{ gridColumn: '1 / -1' }}>
+                No se pudo cargar algún listado; ingresa el ID correspondiente.
+              </p>
+            )}
 
             {errorForm && (
               <p className="form-error" role="alert">

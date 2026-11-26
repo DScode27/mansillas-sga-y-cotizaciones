@@ -27,6 +27,23 @@ export async function listEmpleados(idEmpresa) {
   return data
 }
 
+/* Listado de empleados para los selectores por nombre (Fase 4, R9/RF-06).
+ *
+ * Consumo directo del endpoint real `GET /empresas/{id_empresa}/empleados`
+ * (existe tras la tarea 9), sin mock: es solo lectura y alimenta el `<select>`
+ * de empleado del levantamiento. Difiere de `listEmpleados` (que mantiene su
+ * contrato mockeable para el CRUD de `EmpleadosSection`): este usa la ruta
+ * anidada del catálogo. El interceptor de `apiClient` adjunta el JWT y el
+ * backend impone RBAC/aislamiento; los errores HTTP se propagan tal cual para
+ * que la pantalla los mapee y, si falla, degrade a input de ID.
+ *
+ * Devuelve [{ id_empleado, id_empresa, id_sede, id_departamento, nombre,
+ * documento, correo, cargo, activo }] (EmpleadoOut). */
+export async function listEmpleadosEmpresa(idEmpresa) {
+  const { data } = await apiClient.get(`/empresas/${idEmpresa}/empleados`)
+  return data
+}
+
 export async function createEmpleado({
   id_empresa,
   id_sede,
