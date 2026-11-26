@@ -33,4 +33,5 @@ export const USE_MOCK = {
   qrPdf: false,
   inventario: false,
   permisosQr: false,
+  propuesta: false,
 }

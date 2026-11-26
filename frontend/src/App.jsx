@@ -18,6 +18,7 @@ import LevantamientoPage from './pages/LevantamientoPage'
 import PortalComercialPage from './pages/PortalComercialPage'
 import PortalClientePage from './pages/PortalClientePage'
 import NotFoundPage from './pages/NotFoundPage'
+import PropuestaPublicaPage from './pages/PropuestaPublicaPage'
 import QrPublicoPage from './pages/QrPublicoPage'
 import UsuariosPage from './pages/UsuariosPage'
 import VisitasPage from './pages/VisitasPage'
@@ -30,6 +31,12 @@ export default function App() {
       {/* Vista pública por QR (M6, R10): sin login ni OTP. Va fuera de
           RequireAuth para que cualquiera que escanee el QR vea la ficha. */}
       <Route path="/qr/:token" element={<QrPublicoPage />} />
+
+      {/* Página pública de aceptación de precotización (RF-15, HU-15): el
+          cliente abre el enlace de su propuesta sin login y la acepta con un
+          código enviado por correo. Fuera de RequireAuth y la ruta coincide con
+          `settings.proposal_path` (`/propuesta`) del backend. */}
+      <Route path="/propuesta/:token" element={<PropuestaPublicaPage />} />
 
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
