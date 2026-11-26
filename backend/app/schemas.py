@@ -181,6 +181,26 @@ class DepartamentoCreate(BaseModel):
     nombre: str = Field(min_length=1, max_length=120)
 
 
+class EmpleadoCreate(BaseModel):
+    """Datos para registrar un empleado dentro de una empresa (alta manual).
+
+    La empresa dueña llega por la ruta (`POST /empresas/{id_empresa}/empleados`),
+    no en el cuerpo: el cliente la elige de un desplegable. `id_sede` e
+    `id_departamento` son los desplegables encadenados de la pantalla; el backend
+    valida que existan en la empresa y sean coherentes entre sí (FK compuestas).
+    `nombre` y `cargo` son obligatorios; `documento` (único por empresa en el
+    SQL, `UNIQUE (id_empresa, documento)` → 409) y `correo` son opcionales. Los
+    máximos replican las columnas del esquema.
+    """
+
+    id_sede: int = Field(ge=1)
+    id_departamento: int = Field(ge=1)
+    nombre: str = Field(min_length=1, max_length=150)
+    cargo: str = Field(min_length=1, max_length=100)
+    documento: str | None = Field(default=None, max_length=30)
+    correo: str | None = Field(default=None, max_length=150)
+
+
 # --- Catálogos de listado: sedes, departamentos, empleados (Fase 4, R9) -----
 
 class SedeOut(BaseModel):
