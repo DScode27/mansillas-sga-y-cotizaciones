@@ -11,6 +11,8 @@ import { useParams } from 'react-router-dom'
 import logoMansillas from '../assets/logoMansillas.jpg'
 import {
   getSillaPublica,
+  getFotoPublicaUrl,
+  listFotosPublicas,
   solicitarOtpTicket,
   crearTicket,
   TokenNoEncontrado,
@@ -292,6 +294,11 @@ export default function QrPublicoPage() {
   // 'no-encontrado' (token inválido, 404) | 'generico' (fallo de red/servidor).
   const [error, setError] = useState('')
 
+  // Fotos públicas de la silla: cada una es un object URL que se revoca al
+  // desmontar o al cambiar de token, para no filtrar memoria. Si la carga de
+  // fotos falla (o no hay), la ficha se muestra igual sin sección de fotos.
+  const [fotos, setFotos] = useState([])
+
   // Las llamadas a setState van dentro del flujo asíncrono (como en las demás
   // pantallas) para no disparar renders en cascada desde el propio efecto.
   useEffect(() => {
@@ -316,6 +323,47 @@ export default function QrPublicoPage() {
       })
     return () => {
       vigente = false
+    }
+  }, [token])
+
+  // Carga las fotos tras resolver el token: lista los ids y baja cada imagen
+  // como object URL. Se revocan todas al desmontar o al cambiar de token.
+  useEffect(() => {
+    let vigente = true
+    const urls = []
+    // El reset va dentro del flujo asíncrono (como el resto de efectos de esta
+    // pantalla) para no disparar un render en cascada desde el efecto.
+    Promise.resolve()
+      .then(() => {
+        if (!vigente) return null
+        setFotos([])
+        return listFotosPublicas(token)
+      })
+      .then(async (lista) => {
+        if (!lista) return
+        for (const foto of lista) {
+          if (!vigente) return
+          try {
+            const url = await getFotoPublicaUrl(token, foto.id_fotografia)
+            if (!vigente) {
+              if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+              return
+            }
+            urls.push(url)
+            setFotos((prev) => [...prev, { id: foto.id_fotografia, url }])
+          } catch {
+            // Una foto que no baja no rompe la ficha; se omite.
+          }
+        }
+      })
+      .catch(() => {
+        // Sin fotos o token inválido: la ficha se encarga del error de token.
+      })
+    return () => {
+      vigente = false
+      urls.forEach((u) => {
+        if (u.startsWith('blob:')) URL.revokeObjectURL(u)
+      })
     }
   }, [token])
 
@@ -392,6 +440,23 @@ export default function QrPublicoPage() {
                       >
                         {ESTADO_COMPONENTE_LABEL[comp.estado] ?? comp.estado}
                       </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {fotos.length > 0 && (
+              <section className="qr-publico__fotos">
+                <h2>Fotos de la silla</h2>
+                <ul className="qr-publico__fotos-lista">
+                  {fotos.map((f) => (
+                    <li key={f.id} className="qr-publico__foto">
+                      <img
+                        src={f.url}
+                        alt={`Foto ${f.id} de la silla ${silla.codigo_qr}`}
+                        className="qr-publico__foto-img"
+                      />
                     </li>
                   ))}
                 </ul>

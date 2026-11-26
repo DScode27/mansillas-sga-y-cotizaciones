@@ -31,6 +31,7 @@ from ..config import settings
 from ..models.silla import Silla
 from ..models.ticket import Ticket
 from ..security import hash_token
+from . import componentes_service
 from .email_service import EmailSender
 
 # Expresión SQL de la expiración del OTP: la calcula la BD (misma reloj que el
@@ -68,24 +69,36 @@ class OtpExpiradoOUsado(QrError):
 
 
 def consultar_silla_publica(db: Session, silla: Silla) -> dict:
-    """Datos básicos de la silla + `permiso_qr` de la empresa dueña.
+    """Datos de la silla para la ficha pública + `permiso_qr` de la empresa dueña.
 
-    El `silla` ya viene resuelto por el router a partir de `token_publico`, así
-    que solo se consulta `empresa.permiso_qr` (SQL parametrizado, restringido a
-    `silla.id_empresa` — RN-6).
+    El `silla` ya viene resuelto por el router a partir de `token_publico`.
+    Se consulta en una sola fila el nombre de la empresa dueña, el nombre de su
+    sede y su `permiso_qr` (SQL parametrizado, restringido a `silla.id_empresa`
+    y `silla.id_sede` — RN-6), y se adjunta el estado de los componentes reusando
+    `componentes_service.obtener_checklist`.
 
-    Devuelve un dict con `id_silla`, `codigo_qr`, `estado`, `cargo` y
-    `permiso_qr`. NUNCA incluye nombre, documento ni correo del empleado
-    (RN-3/RN-4).
+    Devuelve un dict con `id_silla`, `codigo_qr`, `estado`, `cargo`,
+    `serial_antiguo`, `empresa` (nombre), `sede` (nombre), `permiso_qr` y
+    `componentes` ([{id_componente, nombre, estado, observacion}]). NUNCA incluye
+    nombre, documento ni correo del empleado (RN-3/RN-4): la sede/empresa y los
+    componentes son datos de la silla, no del empleado.
     """
     schema = settings.db_schema
 
     row = db.execute(
         text(
-            f"SELECT permiso_qr FROM {schema}.empresa "
-            "WHERE id_empresa = :id_empresa"
+            f"""
+            SELECT e.nombre AS empresa,
+                   e.permiso_qr AS permiso_qr,
+                   se.nombre AS sede
+            FROM {schema}.empresa AS e
+            LEFT JOIN {schema}.sede AS se
+                ON se.id_empresa = e.id_empresa
+               AND se.id_sede = :id_sede
+            WHERE e.id_empresa = :id_empresa
+            """
         ),
-        {"id_empresa": silla.id_empresa},
+        {"id_empresa": silla.id_empresa, "id_sede": silla.id_sede},
     ).mappings().first()
 
     # La silla referencia siempre a una empresa existente (FK en el SQL); si la
@@ -93,12 +106,18 @@ def consultar_silla_publica(db: Session, silla: Silla) -> dict:
     if row is None:
         raise QrNoValido
 
+    componentes = componentes_service.obtener_checklist(db, silla.id_silla)
+
     return {
         "id_silla": silla.id_silla,
         "codigo_qr": silla.codigo_qr,
         "estado": silla.estado,
         "cargo": silla.cargo,
+        "serial_antiguo": silla.serial_antiguo,
+        "empresa": row["empresa"],
+        "sede": row["sede"],
         "permiso_qr": int(row["permiso_qr"]),
+        "componentes": componentes,
     }
 
 

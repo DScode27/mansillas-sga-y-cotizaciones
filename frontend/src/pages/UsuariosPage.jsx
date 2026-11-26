@@ -9,6 +9,7 @@
  */
 import { Fragment, useEffect, useState } from 'react'
 import { asignarRol, createUsuario, listUsuarios } from '../api/usuarios'
+import { listEmpresas } from '../api/empresas'
 import { ROLES } from '../auth/roles'
 import { construirCambioRol, rolEsDeCliente } from './usuariosRol'
 
@@ -32,6 +33,12 @@ export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState([])
   const [cargando, setCargando] = useState(true)
   const [errorLista, setErrorLista] = useState('')
+
+  // Empresas para elegir por nombre al asignar un rol de cliente (P1). Si el
+  // listado falla, `empresasDisponibles` cae a false y el campo degrada al
+  // input de ID actual para no bloquear la gestión.
+  const [empresas, setEmpresas] = useState([])
+  const [empresasDisponibles, setEmpresasDisponibles] = useState(true)
 
   const [form, setForm] = useState(FORM_INICIAL)
   const [enviando, setEnviando] = useState(false)
@@ -75,6 +82,22 @@ export default function UsuariosPage() {
       })
       .finally(() => {
         if (vigente) setCargando(false)
+      })
+    return () => {
+      vigente = false
+    }
+  }, [])
+
+  // Carga el catálogo de empresas para el desplegable (P1). Un fallo degrada a
+  // input de ID (no bloquea el alta ni el cambio de rol).
+  useEffect(() => {
+    let vigente = true
+    listEmpresas()
+      .then((data) => {
+        if (vigente) setEmpresas(data)
+      })
+      .catch(() => {
+        if (vigente) setEmpresasDisponibles(false)
       })
     return () => {
       vigente = false
@@ -235,16 +258,36 @@ export default function UsuariosPage() {
 
           {rolEsCliente && (
             <label className="form-field">
-              <span className="form-field__label">ID de empresa</span>
-              <input
-                className="form-field__input"
-                type="number"
-                min={1}
-                value={form.id_empresa}
-                onChange={(e) => actualizarCampo('id_empresa', e.target.value)}
-                required
-                disabled={enviando}
-              />
+              <span className="form-field__label">Empresa</span>
+              {empresasDisponibles ? (
+                <select
+                  className="form-field__input"
+                  value={form.id_empresa}
+                  onChange={(e) => actualizarCampo('id_empresa', e.target.value)}
+                  required
+                  disabled={enviando || empresas.length === 0}
+                >
+                  <option value="">
+                    {empresas.length === 0 ? '— Sin empresas —' : '— Seleccionar —'}
+                  </option>
+                  {empresas.map((emp) => (
+                    <option key={emp.id_empresa} value={emp.id_empresa}>
+                      {emp.nombre}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="form-field__input"
+                  type="number"
+                  min={1}
+                  value={form.id_empresa}
+                  onChange={(e) => actualizarCampo('id_empresa', e.target.value)}
+                  required
+                  disabled={enviando}
+                  placeholder="ID de empresa"
+                />
+              )}
             </label>
           )}
 
@@ -357,19 +400,46 @@ export default function UsuariosPage() {
                               {rolDraftEsCliente && (
                                 <label className="form-field">
                                   <span className="form-field__label">
-                                    ID de empresa
+                                    Empresa
                                   </span>
-                                  <input
-                                    className="form-field__input"
-                                    type="number"
-                                    min={1}
-                                    value={rolDraft.id_empresa}
-                                    onChange={(e) =>
-                                      actualizarRolDraft('id_empresa', e.target.value)
-                                    }
-                                    required
-                                    disabled={guardandoRol}
-                                  />
+                                  {empresasDisponibles ? (
+                                    <select
+                                      className="form-field__input"
+                                      value={rolDraft.id_empresa}
+                                      onChange={(e) =>
+                                        actualizarRolDraft('id_empresa', e.target.value)
+                                      }
+                                      required
+                                      disabled={guardandoRol || empresas.length === 0}
+                                    >
+                                      <option value="">
+                                        {empresas.length === 0
+                                          ? '— Sin empresas —'
+                                          : '— Seleccionar —'}
+                                      </option>
+                                      {empresas.map((emp) => (
+                                        <option
+                                          key={emp.id_empresa}
+                                          value={emp.id_empresa}
+                                        >
+                                          {emp.nombre}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      className="form-field__input"
+                                      type="number"
+                                      min={1}
+                                      value={rolDraft.id_empresa}
+                                      onChange={(e) =>
+                                        actualizarRolDraft('id_empresa', e.target.value)
+                                      }
+                                      required
+                                      disabled={guardandoRol}
+                                      placeholder="ID de empresa"
+                                    />
+                                  )}
                                 </label>
                               )}
 

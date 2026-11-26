@@ -25,6 +25,7 @@ import {
 import { descargarQrPdf } from '../api/qr'
 import { exportarInventario } from '../api/inventario'
 import { descargarBlob } from '../utils/descargarBlob'
+import SillaCard from '../components/SillaCard'
 
 // Mensaje legible por código HTTP al bajar el PDF de QR (RF-05). El cuerpo crudo
 // del backend nunca se muestra al usuario.
@@ -537,22 +538,17 @@ export default function PortalComercialPage() {
                 {sillas.map((s) => {
                   const sugeridos = componentesSugeridos(s)
                   return (
-                    <li key={s.id_silla} className="sillas-lista__item">
-                      <div className="sillas-lista__cabecera">
-                        <span className="sillas-lista__qr">{s.codigo_qr}</span>
-                        {s.sugerir_cambio ? (
-                          <span className="badge badge--alerta">Sugerir cambio</span>
-                        ) : (
-                          <span className="badge badge--ok">En buen estado</span>
-                        )}
-                      </div>
-                      <p className="sillas-lista__cargo">{s.cargo}</p>
-                      {sugeridos.length > 0 && (
-                        <p className="sillas-lista__componentes">
-                          Componentes a cambiar: {sugeridos.join(', ')}.
-                        </p>
-                      )}
-                    </li>
+                    <SillaCard
+                      key={s.id_silla}
+                      silla={s}
+                      extra={
+                        sugeridos.length > 0 ? (
+                          <p className="sillas-lista__componentes">
+                            Componentes a cambiar: {sugeridos.join(', ')}.
+                          </p>
+                        ) : null
+                      }
+                    />
                   )
                 })}
               </ul>

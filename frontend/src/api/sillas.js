@@ -73,15 +73,56 @@ export async function listSillas(idVisita) {
   // `componentes=[]` sin romper la lista.
   const enriquecidas = await Promise.all(
     data.map(async (silla) => {
-      try {
-        const { items, sugerir_cambio } = await getComponentes(silla.id_silla)
-        return { ...silla, componentes: items ?? [], sugerir_cambio }
-      } catch {
-        return { ...silla, componentes: [], sugerir_cambio: false }
-      }
+      // Componentes y fotos se piden en paralelo; cualquiera que falle degrada a
+      // su valor vacío sin romper la fila (la silla sin checklist/fotos aún se
+      // lista). Las fotos aquí son solo la lista de ids; las imágenes se bajan
+      // bajo demanda al expandir el detalle (`getFotoSillaUrl`).
+      const [resComp, resFotos] = await Promise.allSettled([
+        getComponentes(silla.id_silla),
+        listFotosSilla(silla.id_silla),
+      ])
+      const componentes =
+        resComp.status === 'fulfilled' ? (resComp.value.items ?? []) : []
+      const sugerir_cambio =
+        resComp.status === 'fulfilled' ? resComp.value.sugerir_cambio : false
+      const fotos = resFotos.status === 'fulfilled' ? resFotos.value : []
+      return { ...silla, componentes, sugerir_cambio, fotos }
     }),
   )
   return enriquecidas
+}
+
+/* Lista las fotos de una silla (GET /sillas/{id}/fotos, autenticado).
+ *
+ * Devuelve [{ id_fotografia, id_silla, ruta_archivo, nombre_archivo,
+ * fecha_subida }] (FotografiaOut). Solo se usa el `id_fotografia` para luego
+ * bajar la imagen con `getFotoSillaUrl`. En mock devuelve las fotos del store. */
+export async function listFotosSilla(idSilla) {
+  if (USE_MOCK.sillas) {
+    const silla = sillasMock.find((s) => s.id_silla === Number(idSilla))
+    return silla?.fotos ?? []
+  }
+  const { data } = await apiClient.get(FOTOS_ENDPOINT(idSilla))
+  return data
+}
+
+/* Baja una foto de una silla y devuelve un object URL para mostrarla
+ * (GET /sillas/{id}/fotos/{id_fotografia}, autenticado, `responseType: blob`).
+ *
+ * Quien la use debe revocar el object URL al desmontar/colapsar para no filtrar
+ * memoria. En mock, la foto del store ya guarda una URL local (createObjectURL
+ * en `uploadFotoSilla`), que se devuelve tal cual. */
+export async function getFotoSillaUrl(idSilla, idFotografia) {
+  if (USE_MOCK.sillas) {
+    const silla = sillasMock.find((s) => s.id_silla === Number(idSilla))
+    const foto = silla?.fotos?.find((f) => f.id_fotografia === idFotografia)
+    return foto?.ruta_archivo ?? ''
+  }
+  const { data } = await apiClient.get(
+    `${FOTOS_ENDPOINT(idSilla)}/${idFotografia}`,
+    { responseType: 'blob' },
+  )
+  return URL.createObjectURL(data)
 }
 
 export async function createSilla({

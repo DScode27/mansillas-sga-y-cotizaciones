@@ -79,6 +79,11 @@ def test_silla_registrada_devuelve_datos_basicos_y_permiso(cliente, fabrica):
     assert cuerpo["cargo"] == silla.cargo
     # Empresa recién creada: la BD aplica el DEFAULT 1 (CHECK IN (1, 2, 3)).
     assert cuerpo["permiso_qr"] == 1
+    # Ficha ampliada (HU-17): nombre de empresa/sede dueñas y lista de
+    # componentes (vacía mientras no haya checklist guardado).
+    assert cuerpo["empresa"] == datos["empresa"].nombre
+    assert cuerpo["sede"] == datos["sede"].nombre
+    assert cuerpo["componentes"] == []
 
 
 @settings(

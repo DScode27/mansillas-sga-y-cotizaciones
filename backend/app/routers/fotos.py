@@ -3,8 +3,11 @@
 Technicians attach photographs to chairs within their own visits; authorized
 users consult and retrieve them. Files live on local disk (see
 `app/services/fotos_storage.py`); only the relative path is stored in
-`fotografia.ruta_archivo`. Photographs are never exposed through a public QR
-endpoint nor a static public mount.
+`fotografia.ruta_archivo`. These endpoints require authentication and are never
+exposed through a static public mount. The public QR view serves a chair's
+photographs through its own anonymous, token-keyed endpoints in
+`app/routers/qr.py` (`GET /qr/silla/{token}/fotos[/{id}]`): the 128-bit public
+token acts as the capability to view only that chair's photographs (HU-17).
 """
 
 import logging

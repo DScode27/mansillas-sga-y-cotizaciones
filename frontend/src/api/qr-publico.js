@@ -22,6 +22,13 @@ const publicClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
+// Cliente anónimo para bajar imágenes: mismo `baseURL`, sin JWT, y con
+// `responseType: 'blob'` para recibir los bytes de la foto tal cual.
+const publicBlobClient = axios.create({
+  baseURL,
+  responseType: 'blob',
+})
+
 // Error que la pantalla reconoce como "token inválido" (404), para distinguirlo
 // de un fallo de red/servidor y mostrar el mensaje correcto.
 export class TokenNoEncontrado extends Error {
@@ -53,6 +60,9 @@ const fichasMock = {
       { nombre: 'Asiento / Espaldar', estado: 'DANADO' },
       { nombre: 'Malla', estado: 'BUENO' },
     ],
+    // Fotos simuladas: ids + una imagen placeholder por cada una (ver
+    // `listFotosPublicas`/`getFotoPublicaUrl`).
+    fotos: [{ id_fotografia: 101 }, { id_fotografia: 102 }],
   },
   'mock-token-2': {
     codigo_qr: 'SIC-00000002',
@@ -254,4 +264,51 @@ export async function crearTicket(
     codigo,
   })
   return data
+}
+
+/* Lista las fotos públicas de una silla por su `token_publico`
+ * (GET /qr/silla/{token}/fotos).
+ *
+ * El backend expone solo los `id_fotografia`; los bytes se bajan aparte con
+ * `getFotoPublicaUrl`. Una silla sin fotos devuelve []. Un token inválido
+ * propaga `TokenNoEncontrado` (404), igual que la ficha. En modo mock devuelve
+ * la lista `fotos` de la ficha simulada. */
+export async function listFotosPublicas(token) {
+  if (USE_MOCK.qrPublico) {
+    const ficha = fichasMock[token]
+    if (!ficha) throw new TokenNoEncontrado()
+    return ficha.fotos ?? []
+  }
+
+  try {
+    const { data } = await publicClient.get(`/qr/silla/${token}/fotos`)
+    return data
+  } catch (err) {
+    if (err.response?.status === 404) throw new TokenNoEncontrado()
+    throw err
+  }
+}
+
+/* Baja una foto pública y devuelve un object URL para mostrarla
+ * (GET /qr/silla/{token}/fotos/{id_fotografia}).
+ *
+ * Usa el cliente anónimo con `responseType: 'blob'` (sin JWT). Quien la use debe
+ * revocar el object URL (`URL.revokeObjectURL`) al desmontar para no filtrar
+ * memoria. En modo mock genera un SVG placeholder como data URL (no hay bytes
+ * reales que servir), coherente con el resto de mocks de previsualización. */
+export async function getFotoPublicaUrl(token, idFotografia) {
+  if (USE_MOCK.qrPublico) {
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120">` +
+      `<rect width="100%" height="100%" fill="#e2e8f0"/>` +
+      `<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" ` +
+      `font-family="sans-serif" font-size="14" fill="#475569">Foto ${idFotografia}</text>` +
+      `</svg>`
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+  }
+
+  const { data } = await publicBlobClient.get(
+    `/qr/silla/${token}/fotos/${idFotografia}`,
+  )
+  return URL.createObjectURL(data)
 }

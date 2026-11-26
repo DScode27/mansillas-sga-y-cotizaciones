@@ -33,6 +33,7 @@ import { descargarQrPdf } from '../api/qr'
 import { descargarBlob } from '../utils/descargarBlob'
 import { ROLES } from '../auth/roles'
 import { useAuth } from '../context/auth-context'
+import SillaCard from '../components/SillaCard'
 
 // Mensaje legible por código HTTP al bajar el PDF de QR (RF-05). El cuerpo crudo
 // del backend nunca se muestra al usuario.
@@ -324,6 +325,19 @@ export default function LevantamientoPage() {
     setForm((prev) => ({ ...prev, [campo]: valor }))
   }
 
+  // Al elegir un empleado se autocompleta el cargo del puesto con el cargo del
+  // empleado (P3), que el técnico puede corregir después: el input de "Cargo del
+  // puesto" sigue editable. Si el selector de empleados degradó a input de ID no
+  // hay empleado en la lista del que copiar, así que solo se guarda el id.
+  function seleccionarEmpleado(valor) {
+    const empleado = empleados.find((e) => String(e.id_empleado) === String(valor))
+    setForm((prev) => ({
+      ...prev,
+      id_empleado: valor,
+      cargo: empleado?.cargo ? empleado.cargo : prev.cargo,
+    }))
+  }
+
   // Al cambiar la sede se limpia el departamento elegido: el encadenado sede →
   // departamentos recarga la lista y una sede nueva no comparte departamentos.
   function actualizarSede(valor) {
@@ -581,7 +595,7 @@ export default function LevantamientoPage() {
                 <select
                   className="form-field__input"
                   value={form.id_empleado}
-                  onChange={(e) => actualizarCampo('id_empleado', e.target.value)}
+                  onChange={(e) => seleccionarEmpleado(e.target.value)}
                   required
                   disabled={enviando || empleados.length === 0}
                 >
@@ -783,22 +797,7 @@ export default function LevantamientoPage() {
           {!cargandoSillas && !errorSillas && sillas.length > 0 && (
             <ul className="sillas-lista">
               {sillas.map((s) => (
-                <li key={s.id_silla} className="sillas-lista__item">
-                  <div className="sillas-lista__cabecera">
-                    <span className="sillas-lista__qr">{s.codigo_qr}</span>
-                    {s.sugerir_cambio ? (
-                      <span className="badge badge--alerta">Sugerir cambio</span>
-                    ) : (
-                      <span className="badge badge--ok">En buen estado</span>
-                    )}
-                  </div>
-                  <p className="sillas-lista__cargo">{s.cargo}</p>
-                  {(s.fotos?.length ?? 0) > 0 && (
-                    <span className="sillas-lista__fotos">
-                      {s.fotos.length} foto{s.fotos.length === 1 ? '' : 's'}
-                    </span>
-                  )}
-                </li>
+                <SillaCard key={s.id_silla} silla={s} />
               ))}
             </ul>
           )}

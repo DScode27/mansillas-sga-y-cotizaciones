@@ -623,6 +623,48 @@
   color: var(--color-texto-suave);
 }
 
+/* Estado de los 5 componentes dentro de la tarjeta de silla (P2). */
+.sillas-lista__componentes-estado {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sillas-lista__componente {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+/* Bloque de fotos expandible (P2): botón "Ver N fotos" + rejilla de miniaturas. */
+.sillas-lista__fotos-bloque {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sillas-lista__fotos-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sillas-lista__foto-thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: var(--radio-sm);
+  border: 1px solid var(--color-borde);
+}
+
 /* Vista pública por QR (M6): tarjeta centrada, como el login, fuera del layout. */
 .qr-publico {
   min-height: 100vh;
@@ -727,6 +769,33 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+/* Fotos de la silla en la vista pública (P4): rejilla de miniaturas. */
+.qr-publico__fotos {
+  margin-top: 1.25rem;
+}
+
+.qr-publico__fotos h2 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.qr-publico__fotos-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.qr-publico__foto-img {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: var(--radio-sm);
+  border: 1px solid var(--color-borde);
 }
 
 /* Bloque de envío de ticket por QR (RF-24): separado de la ficha por un borde

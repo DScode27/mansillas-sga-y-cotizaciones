@@ -4,6 +4,7 @@ from typing import Annotated
 
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from qrcode.constants import ERROR_CORRECT_H
 from reportlab.lib.pagesizes import A4
@@ -16,9 +17,10 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.deps import CurrentUser, get_current_user, require_role
-from app.models import Silla, Visita
+from app.models import Fotografia, Silla, Visita
+from app.routers.fotos import _MEDIA_POR_EXTENSION
 from app.routers.sillas import get_silla_by_token
-from app.services import permisos_service, qr_service
+from app.services import fotos_storage, permisos_service, qr_service
 from app.services.email_service import EmailSender, get_email_sender
 from app.services.permisos_service import PermisoInvalido
 from app.services.qr_service import (
@@ -41,15 +43,40 @@ class QrPdfRequest(BaseModel):
     ids: list[int] = []
 
 
+class ComponentePublicoOut(BaseModel):
+    """One component's state in the public chair lookup (HU-17)."""
+
+    id_componente: int
+    nombre: str
+    estado: str
+    observacion: str | None = None
+
+
 class ConsultaPublicaOut(BaseModel):
-    """Public chair lookup response (HU-17): basic data + owning company's
-    permiso_qr. Never includes the employee's name, document or email."""
+    """Public chair lookup response (HU-17): chair data + owning company's
+    permiso_qr and component states. Never includes the employee's name,
+    document or email (RN-3/RN-4); company/branch and components are chair data,
+    not personal data."""
 
     id_silla: int
     codigo_qr: str
     estado: str
     cargo: str
+    serial_antiguo: str | None = None
+    empresa: str | None = None
+    sede: str | None = None
     permiso_qr: int
+    componentes: list[ComponentePublicoOut] = []
+
+
+class FotoPublicaOut(BaseModel):
+    """One photograph reference in the public chair lookup (HU-17).
+
+    Only the identifier is exposed; the bytes are served by the anonymous
+    `GET /qr/silla/{token}/fotos/{id_fotografia}` endpoint keyed by the public
+    token. No stored path or file name is leaked."""
+
+    id_fotografia: int
 
 
 class PermisoQrOut(BaseModel):
@@ -216,6 +243,68 @@ def consultar_silla_publica(
 
     datos = qr_service.consultar_silla_publica(db, silla)
     return ConsultaPublicaOut(**datos)
+
+
+@router.get("/silla/{token}/fotos", response_model=list[FotoPublicaOut])
+def listar_fotos_publicas(
+    token: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> list[FotoPublicaOut]:
+    """Public photo listing for a chair (HU-17): no auth, keyed by public token.
+
+    Resolves the chair by its `token_publico` (unknown/malformed → 404) and
+    returns only the photo identifiers; the bytes are served by the companion
+    endpoint. The public token (a 128-bit UUID) acts as the capability to view
+    this chair's photographs and nothing else. No personal data is involved: a
+    photograph belongs to the chair, not to the employee (RN-3/RN-4).
+    """
+    silla = get_silla_by_token(db, token)
+    if silla is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "QR no válido")
+
+    fotos = db.scalars(
+        select(Fotografia)
+        .where(Fotografia.id_silla == silla.id_silla)
+        .order_by(Fotografia.id_fotografia)
+    ).all()
+    return [FotoPublicaOut(id_fotografia=foto.id_fotografia) for foto in fotos]
+
+
+@router.get("/silla/{token}/fotos/{id_fotografia}")
+def obtener_foto_publica(
+    token: str,
+    id_fotografia: int,
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    """Serve one chair photograph through the public QR (HU-17): no auth.
+
+    Resolves the chair by its `token_publico`; the requested photograph must
+    belong to that chair (otherwise 404, so the token never grants access to
+    another chair's photos). `fotos_storage.resolver` guarantees the stored path
+    cannot escape the storage directory.
+    """
+    silla = get_silla_by_token(db, token)
+    if silla is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "QR no válido")
+
+    foto = db.get(Fotografia, id_fotografia)
+    if foto is None or foto.id_silla != silla.id_silla:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No encontrado")
+
+    try:
+        ruta = fotos_storage.resolver(foto.ruta_archivo)
+    except FileNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No encontrado") from None
+    except fotos_storage.FotoInvalida:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No encontrado") from None
+    except OSError:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "No fue posible leer la fotografía",
+        ) from None
+
+    media = _MEDIA_POR_EXTENSION.get(ruta.suffix.lower(), "application/octet-stream")
+    return FileResponse(ruta, media_type=media)
 
 
 @router.post("/silla/{token}/otp", status_code=status.HTTP_204_NO_CONTENT)
