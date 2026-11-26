@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import accesos, auth, qr, sillas, usuarios, visitas
+from app.routers import accesos, auth, fotos, precotizaciones, qr, sillas, usuarios, visitas
 
 app = FastAPI(
     title=settings.app_name,
@@ -32,6 +32,8 @@ app.include_router(auth.router)
 app.include_router(usuarios.router)
 app.include_router(visitas.router)
 app.include_router(sillas.router)
+app.include_router(fotos.router)
+app.include_router(precotizaciones.router)
 app.include_router(qr.router)
 app.include_router(accesos.router)
 

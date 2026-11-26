@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -16,10 +16,39 @@ from app.deps import (
     require_role,
 )
 from app.models import Empleado, Silla, Visita
+from app.services import precotizacion_rules
 
 router = APIRouter(tags=["sillas"])
 
 SERIAL_DUPLICADO = "serial_antiguo duplicado para la empresa"
+
+
+class DetalleError(BaseModel):
+    """Standard FastAPI error body (`{"detail": "..."}`)."""
+
+    detail: str
+
+
+def _err_silla(descripcion: str, ejemplo: str) -> dict:
+    return {
+        "model": DetalleError,
+        "description": descripcion,
+        "content": {"application/json": {"example": {"detail": ejemplo}}},
+    }
+
+
+RESP_LISTAR_SILLAS = {
+    401: _err_silla("No autenticado.", "Token de acceso requerido"),
+    403: _err_silla("Rol no autorizado o visita ajena.", "Rol no autorizado"),
+    404: _err_silla("La visita no existe.", "No encontrado"),
+}
+RESP_SILLA_COMERCIAL = {
+    401: _err_silla("No autenticado.", "Token de acceso requerido"),
+    403: _err_silla("Rol no autorizado.", "Rol no autorizado"),
+    404: _err_silla("La silla o su visita no existe.", "No encontrado"),
+    409: _err_silla("Propuesta enviada/aceptada o serial duplicado.", SERIAL_DUPLICADO),
+    422: _err_silla("cargo o serial_antiguo exceden la longitud permitida.", "cargo no puede superar 100 caracteres"),
+}
 
 
 class SillaCreate(BaseModel):
@@ -30,6 +59,21 @@ class SillaCreate(BaseModel):
 
 
 class SillaUpdate(BaseModel):
+    serial_antiguo: str | None = None
+    observaciones: str | None = None
+
+
+class SillaUpdateComercial(BaseModel):
+    """Fields a Comercial may correct on the survey (HU-12).
+
+    Only `cargo`, `serial_antiguo`, `observaciones` (all VARCHAR(100)/TEXT in the
+    schema). Omitted fields are left unchanged (distinguished via
+    `model_dump(exclude_unset=True)`). `cargo` is `NOT NULL` in the schema, so it
+    may be changed but not cleared (null/empty is rejected). `serial_antiguo` and
+    `observaciones` are nullable, so they can be cleared explicitly with `null`.
+    """
+
+    cargo: str | None = None
     serial_antiguo: str | None = None
     observaciones: str | None = None
 
@@ -174,6 +218,42 @@ def registrar_silla(
     return silla
 
 
+def _autorizar_visita(user: CurrentUser, visita: Visita) -> None:
+    """Allow a commercial on any visit and a technician only on their own."""
+    if user.rol == "COMERCIAL_MANSILLAS":
+        return
+    if user.rol == "TECNICO":
+        require_tecnico_owns_visita(user, visita)
+        return
+    raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol no autorizado")
+
+
+@router.get("/sillas", response_model=list[SillaOut], responses=RESP_LISTAR_SILLAS)
+def listar_sillas(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    id_visita: Annotated[int, Query(description="Visit whose chairs are listed")],
+) -> list[Silla]:
+    """Return every chair of a visit so the real count can be derived (HU-02).
+
+    `id_visita` is required. A Comercial may query any visit; a Tecnico only
+    their own assigned visits. The real number of chairs is the length of the
+    returned list; no counter is stored. Component/`sugerir_cambio` fields are
+    out of scope (Esteban's module).
+    """
+    visita = db.get(Visita, id_visita)
+    if visita is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No encontrado")
+    _autorizar_visita(user, visita)
+
+    stmt = (
+        select(Silla)
+        .where(Silla.id_visita == id_visita)
+        .order_by(Silla.id_silla)
+    )
+    return list(db.scalars(stmt).all())
+
+
 @router.get("/sillas/token/{token}", response_model=SillaCreadaOut)
 def obtener_silla_por_token(
     token: str,
@@ -209,6 +289,75 @@ def actualizar_silla(
     datos = payload.model_dump(exclude_unset=True)
     if "serial_antiguo" in datos:
         silla.serial_antiguo = _normalizar_texto(datos["serial_antiguo"])
+    if "observaciones" in datos:
+        silla.observaciones = _normalizar_texto(datos["observaciones"])
+
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if _es_serial_duplicado(error):
+            raise HTTPException(status.HTTP_409_CONFLICT, SERIAL_DUPLICADO) from None
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "No fue posible actualizar la silla",
+        ) from None
+
+    db.refresh(silla)
+    return silla
+
+
+@router.put(
+    "/sillas/{id_silla}/comercial",
+    response_model=SillaOut,
+    responses=RESP_SILLA_COMERCIAL,
+)
+def actualizar_silla_comercial(
+    id_silla: int,
+    payload: SillaUpdateComercial,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[CurrentUser, Depends(require_role("COMERCIAL_MANSILLAS"))],
+) -> Silla:
+    """Commercial survey edit before the pre-quotation (HU-12).
+
+    Only `cargo`/`serial_antiguo`/`observaciones` are editable; identifiers, QR,
+    tokens, ownership relations and `cantidad_estimada` stay immutable. The
+    chair's visit row is locked (`FOR UPDATE`) and the shared guard rejects the
+    edit (409) when the visit's proposal is frozen (`ENVIADA`/`ACEPTADA`). This
+    endpoint does not change the technician's `PUT /sillas/{id}`.
+    """
+    silla = _cargar_silla(db, id_silla)
+
+    # Lock the chair's visit row first (consistent lock order), then guard.
+    if precotizacion_rules.lock_visita(db, silla.id_visita) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No encontrado")
+    if precotizacion_rules.propuesta_congelada(db, silla.id_visita):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "La propuesta ya fue enviada o aceptada; el levantamiento no puede editarse",
+        )
+
+    datos = payload.model_dump(exclude_unset=True)
+    if "cargo" in datos:
+        cargo = _normalizar_texto(datos["cargo"])
+        if cargo is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "cargo no puede quedar vacío"
+            )
+        if len(cargo) > 100:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "cargo no puede superar 100 caracteres",
+            )
+        silla.cargo = cargo
+    if "serial_antiguo" in datos:
+        serial = _normalizar_texto(datos["serial_antiguo"])
+        if serial is not None and len(serial) > 100:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "serial_antiguo no puede superar 100 caracteres",
+            )
+        silla.serial_antiguo = serial
     if "observaciones" in datos:
         silla.observaciones = _normalizar_texto(datos["observaciones"])
 
