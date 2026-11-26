@@ -374,6 +374,24 @@
   background: var(--color-fondo);
 }
 
+/* Fila expandible de detalle dentro de una tabla (p. ej. accesos de una
+   precotización). No resalta al pasar el cursor, para distinguirla de las
+   filas de datos. */
+.data-table__detalle:hover {
+  background: transparent;
+}
+
+/* Lista de accesos al enlace público de una precotización. */
+.accesos-lista {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.88rem;
+  color: var(--color-texto-suave);
+}
+
 /* Insignias de estado. */
 .badge {
   display: inline-block;
@@ -391,4 +409,310 @@
 .badge--off {
   background: rgba(127, 127, 129, 0.15);
   color: var(--color-texto-suave);
+}
+
+/* Sección de empleados (alta manual + importación Excel) dentro de Empresas. */
+.empleados {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-borde);
+}
+
+.empleados__titulo {
+  margin: 0;
+}
+
+.empleados__subtitulo {
+  margin: 0.5rem 0 0;
+}
+
+.empleados__import {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-sm);
+  background: var(--color-fondo);
+}
+
+.empleados__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.empleados__errores {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--color-error);
+  font-size: 0.9rem;
+}
+
+/* Insignia de alerta (p. ej. sillas con sugerencia de cambio). */
+.badge--alerta {
+  background: rgba(192, 57, 43, 0.12);
+  color: var(--color-error);
+}
+
+/* Levantamiento móvil (HU-28): pensado para una sola columna en el móvil. */
+.levantamiento__selectores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+/* Estado de los 5 componentes de la silla. */
+.componentes {
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-sm);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 0;
+}
+
+.componentes__legend {
+  padding: 0 0.4rem;
+  font-weight: 600;
+  color: var(--color-texto);
+}
+
+.componente {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-borde);
+}
+
+.componente:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.componente__nombre {
+  font-weight: 600;
+}
+
+.componente__estados {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.componente__opcion {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.componente__obs {
+  width: 100%;
+}
+
+.componentes__sugerencia {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--color-error);
+  background: rgba(192, 57, 43, 0.08);
+  color: var(--color-texto);
+  font-size: 0.9rem;
+  border-radius: 4px;
+}
+
+/* Carga de fotos de la silla. */
+.fotos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fotos__lista {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.fotos__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.fotos__thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: var(--radio-sm);
+  border: 1px solid var(--color-borde);
+}
+
+.fotos__quitar {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+/* Listado de sillas levantadas (tarjetas, cómodas en móvil). */
+.sillas-lista {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+
+.sillas-lista__item {
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-sm);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sillas-lista__cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.sillas-lista__qr {
+  font-weight: 700;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+
+.sillas-lista__cargo {
+  margin: 0;
+  color: var(--color-texto-suave);
+}
+
+.sillas-lista__fotos {
+  font-size: 0.8rem;
+  color: var(--color-texto-suave);
+}
+
+.sillas-lista__componentes {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-texto-suave);
+}
+
+/* Vista pública por QR (M6): tarjeta centrada, como el login, fuera del layout. */
+.qr-publico {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--color-fondo);
+}
+
+.qr-publico__card {
+  width: 100%;
+  max-width: 420px;
+}
+
+.qr-publico__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+/* El logo siempre sobre fondo blanco (HU-27). */
+.qr-publico__logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  background: var(--color-sobre-primario);
+  border-radius: var(--radio-sm);
+  padding: 3px;
+}
+
+.qr-publico__marca {
+  font-weight: 700;
+  color: var(--color-texto-suave);
+}
+
+.qr-publico__estado h1 {
+  margin-bottom: 0.25rem;
+}
+
+.qr-publico__cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.qr-publico__qr {
+  font-weight: 700;
+  font-size: 1.1rem;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+
+.qr-publico__datos {
+  margin: 0 0 1rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.qr-publico__dato {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--color-borde);
+  padding-bottom: 0.6rem;
+}
+
+.qr-publico__dato:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.qr-publico__dato dt {
+  color: var(--color-texto-suave);
+  font-size: 0.85rem;
+}
+
+.qr-publico__dato dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
+.qr-publico__componentes h2 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.qr-publico__lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.qr-publico__componente {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
