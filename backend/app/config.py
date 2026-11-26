@@ -57,6 +57,17 @@ class Settings(BaseSettings):
     supabase_key: str = ""
     supabase_schema: str = "mansillas"
 
+    # SMTP for OTP email delivery (HU-24). Empty host => development log sender.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "no-reply@mansillas.local"
+
+    # One-time password (OTP) parameters for public QR tickets.
+    otp_ttl_minutes: int = 10
+    otp_length: int = 6
+
     @property
     def is_production(self) -> bool:
         return self.app_env.strip().lower() in PRODUCTION_ENVIRONMENTS

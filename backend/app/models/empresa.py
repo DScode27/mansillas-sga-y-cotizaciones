@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, String
+from sqlalchemy import BigInteger, Boolean, FetchedValue, SmallInteger, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.config import settings
@@ -16,3 +16,9 @@ class Empresa(Base):
     nit: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
     correo: Mapped[str | None] = mapped_column(String(150))
     telefono: Mapped[str | None] = mapped_column(String(30))
+    permiso_qr: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=FetchedValue()
+    )
+    activa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=FetchedValue()
+    )
