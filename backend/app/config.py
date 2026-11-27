@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     smtp_from: str = ""
     smtp_tls: bool = True  # STARTTLS; a secure connection is never silently downgraded
     smtp_timeout: float = 10.0
+    # Resend HTTP API (https, port 443). Preferred on hosts that block outbound
+    # SMTP ports (e.g. Render free tier). When set, email is sent via Resend and
+    # SMTP is not used; the sender address still comes from `smtp_from`.
+    resend_api_key: str = ""
     # Public proposal path appended to FRONTEND_URL for the link (provisional).
     proposal_path: str = "/propuesta"
 
@@ -91,9 +95,14 @@ class Settings(BaseSettings):
     otp_length: int = 6
 
     @property
+    def resend_configurado(self) -> bool:
+        """True when Resend's HTTP API can be used to send email."""
+        return bool(self.resend_api_key and self.smtp_from)
+
+    @property
     def smtp_configurado(self) -> bool:
-        """True when the minimum SMTP settings to send are present."""
-        return bool(self.smtp_host and self.smtp_from)
+        """True when email can be sent, via Resend (preferred) or SMTP."""
+        return self.resend_configurado or bool(self.smtp_host and self.smtp_from)
 
     @property
     def is_production(self) -> bool:

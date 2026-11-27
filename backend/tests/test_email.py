@@ -231,6 +231,60 @@ def test_exigir_tls_sin_tls_sin_credenciales(monkeypatch, fake_smtp):
     assert fake_smtp.instancias == []
 
 
+@pytest.fixture
+def resend_configurado(monkeypatch):
+    monkeypatch.setattr(settings, "resend_api_key", "re_test_key")
+    monkeypatch.setattr(settings, "smtp_from", "no-reply@test")
+    monkeypatch.setattr(settings, "smtp_timeout", 5.0)
+
+
+def test_resend_envia_por_http_sin_smtp(resend_configurado, fake_smtp, monkeypatch):
+    """With Resend configured, send goes over HTTP and never opens SMTP."""
+    llamadas = {}
+
+    class _Resp:
+        def raise_for_status(self):
+            llamadas["raised"] = True
+
+    def _post(url, headers=None, json=None, timeout=None):
+        llamadas["url"] = url
+        llamadas["headers"] = headers
+        llamadas["json"] = json
+        llamadas["timeout"] = timeout
+        return _Resp()
+
+    monkeypatch.setattr(email_service.httpx, "post", _post)
+
+    email_service.enviar_correo("cliente@example.com", "Asunto", "Cuerpo")
+
+    assert llamadas["url"] == "https://api.resend.com/emails"
+    assert llamadas["headers"]["Authorization"] == "Bearer re_test_key"
+    assert llamadas["json"]["from"] == "no-reply@test"
+    assert llamadas["json"]["to"] == ["cliente@example.com"]
+    assert llamadas["json"]["subject"] == "Asunto"
+    assert llamadas["json"]["text"] == "Cuerpo"
+    assert llamadas["timeout"] == 5.0
+    assert fake_smtp.instancias == []  # SMTP never opened
+
+
+def test_resend_error_http_se_traduce(resend_configurado, monkeypatch):
+    """A Resend HTTP error maps to EmailEnvioError (controlled)."""
+    import httpx
+
+    def _post(*a, **k):
+        raise httpx.ConnectError("boom")
+
+    monkeypatch.setattr(email_service.httpx, "post", _post)
+    with pytest.raises(email_service.EmailEnvioError):
+        email_service.enviar_correo("cliente@example.com", "s", "c")
+
+
+def test_resend_destinatario_invalido_rechazado(resend_configurado):
+    """Recipient validation still applies on the Resend path."""
+    with pytest.raises(email_service.EmailInvalido):
+        email_service.enviar_correo("a@b.com\r\nBcc: x@y.com", "s", "c")
+
+
 def test_exigir_tls_default_retrocompatible(monkeypatch, fake_smtp):
     """Without exigir_tls (HU-13 callers), a no-credentials non-TLS send still works."""
     monkeypatch.setattr(settings, "smtp_host", "smtp.test")

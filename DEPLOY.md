@@ -37,7 +37,8 @@ El backend es FastAPI servido con uvicorn, gestionado con `uv`.
 | `JWT_SECRET` | Secreto largo. Generar con `python -c "import secrets;print(secrets.token_urlsafe(48))"`. |
 | `FRONTEND_URL` | URL pública del frontend (p. ej. `https://mansillas.vercel.app`). Se usa para CORS y para el enlace del QR/propuesta. |
 | `OTP_SECRET` | Secreto independiente del JWT (mismo método para generarlo). Necesario para el OTP de aceptación de propuesta. |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_TLS` | Envío de correo. Ver `backend/README.md` (Gmail con contraseña de aplicación es gratis y sin tarjeta). Sin esto, los correos quedan deshabilitados con error controlado. |
+| `RESEND_API_KEY` | **Recomendado en Render free.** API key de [Resend](https://resend.com) (`re_...`) para enviar correo por HTTPS. Render (plan gratis) bloquea los puertos SMTP salientes (25/465/587), así que Gmail/Brevo por SMTP fallan con error de red; Resend usa el puerto 443 y sí funciona. Si está definida, se usa Resend y se ignora el SMTP. El remitente se toma de `SMTP_FROM` (usa `onboarding@resend.dev` para probar sin dominio). |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_TLS` | Envío de correo por SMTP (alternativa a Resend, útil en local). Ver `backend/README.md`. Sin `RESEND_API_KEY` ni SMTP, los correos quedan deshabilitados con error controlado. `SMTP_FROM` es también el remitente usado por Resend. |
 | `DB_SCHEMA` | Opcional, por defecto `mansillas`. |
 
 > El `cors_origins` del backend deriva de `FRONTEND_URL` (más los localhost de

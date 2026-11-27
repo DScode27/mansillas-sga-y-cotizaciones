@@ -13,11 +13,10 @@ sustituirlo por un *fake* en pruebas (`app.dependency_overrides`).
 from __future__ import annotations
 
 import logging
-import smtplib
-from email.message import EmailMessage
 from typing import Protocol
 
 from ..config import settings
+from .email import enviar_correo
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +48,7 @@ class SmtpEmailSender:
     """
 
     def enviar_codigo(self, correo: str, codigo: str) -> None:
-        mensaje = EmailMessage()
-        mensaje["Subject"] = "Tu código de verificación - Mansillas SIC"
-        mensaje["From"] = settings.smtp_from
-        mensaje["To"] = correo
-        mensaje.set_content(
+        cuerpo = (
             "Mansillas SIC\n\n"
             "Para enviar tu ticket de soporte, usa este código de "
             "verificación:\n\n"
@@ -62,16 +57,13 @@ class SmtpEmailSender:
             "compartas con nadie.\n"
             "Si tú no solicitaste este código, ignora este mensaje."
         )
-
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as servidor:
-            servidor.starttls()
-            if settings.smtp_user:
-                servidor.login(settings.smtp_user, settings.smtp_password)
-            servidor.send_message(mensaje)
+        # Reuse the shared sender (`email.py`), which prefers Resend's HTTP API
+        # when configured and falls back to SMTP otherwise.
+        enviar_correo(correo, "Tu código de verificación - Mansillas SIC", cuerpo)
 
 
 def get_email_sender() -> EmailSender:
-    """Dependencia FastAPI: SMTP si hay `smtp_host`; si no, el sender de log."""
-    if settings.smtp_host:
+    """Dependencia FastAPI: envío real si hay SMTP o Resend; si no, log."""
+    if settings.smtp_configurado:
         return SmtpEmailSender()
     return LogEmailSender()

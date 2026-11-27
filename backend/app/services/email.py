@@ -24,6 +24,8 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 
+import httpx
+
 from app.config import settings
 
 # Max length of a client email, matching the DB column `precotizacion.correo_cliente`.
@@ -78,6 +80,42 @@ def validar_destinatario(correo: str) -> str:
     return valor
 
 
+def _enviar_por_resend(destinatario: str, asunto: str, cuerpo: str) -> None:
+    """Send a plain-text email via Resend's HTTP API.
+
+    Used when `RESEND_API_KEY` is configured (preferred on hosts that block
+    outbound SMTP ports). Raises `EmailEnvioError` on any transport or API
+    error. The API key and message body are never logged.
+    """
+    try:
+        respuesta = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {settings.resend_api_key}"},
+            json={
+                "from": settings.smtp_from,
+                "to": [destinatario],
+                "subject": asunto,
+                "text": cuerpo,
+            },
+            timeout=settings.smtp_timeout,
+        )
+        respuesta.raise_for_status()
+    except httpx.HTTPStatusError as error:
+        logger.error(
+            "Fallo al enviar correo (Resend) a %s: HTTP %s",
+            destinatario,
+            error.response.status_code,
+        )
+        raise EmailEnvioError("No fue posible enviar el correo") from error
+    except httpx.HTTPError as error:
+        logger.error(
+            "Fallo al enviar correo (Resend) a %s: %s",
+            destinatario,
+            type(error).__name__,
+        )
+        raise EmailEnvioError("No fue posible enviar el correo") from error
+
+
 def _construir_mensaje(destinatario: str, asunto: str, cuerpo: str) -> EmailMessage:
     mensaje = EmailMessage()
     mensaje["From"] = settings.smtp_from
@@ -101,6 +139,13 @@ def enviar_correo(
     """
     if not settings.smtp_configurado:
         raise EmailNoConfigurado("SMTP no está configurado")
+
+    # Prefer Resend's HTTP API when configured (works where SMTP is blocked).
+    # Transport is always TLS (HTTPS), so `exigir_tls` is satisfied.
+    if settings.resend_configurado:
+        destino = validar_destinatario(destinatario)
+        _enviar_por_resend(destino, asunto, cuerpo)
+        return
 
     if exigir_tls and not settings.smtp_tls:
         raise EmailNoConfigurado("Este envío requiere una conexión SMTP con TLS")
