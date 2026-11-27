@@ -175,6 +175,49 @@ def test_tecnico_solo_ve_sus_visitas(cliente, fabrica, auth, db):
     assert total == 120
 
 
+def test_admin_cliente_ve_solo_las_visitas_de_su_empresa(cliente, fabrica, auth):
+    """El ADMIN_CLIENTE ve las visitas de su empresa y solo esas (R4).
+
+    Empresa A (la suya) tiene una visita; empresa B tiene otra. El admin cliente
+    de A debe recibir 200 con la visita de A y nunca la de B.
+    """
+    comercial = fabrica.usuario("COMERCIAL_MANSILLAS")
+    tecnico = fabrica.usuario("TECNICO")
+
+    empresa_a = fabrica.empresa("Empresa A")
+    sede_a = fabrica.sede(empresa_a)
+    visita_a = fabrica.visita(empresa_a, sede_a, comercial, tecnico)
+
+    empresa_b = fabrica.empresa("Empresa B")
+    sede_b = fabrica.sede(empresa_b)
+    visita_b = fabrica.visita(empresa_b, sede_b, comercial, tecnico)
+
+    admin_cliente = fabrica.usuario("ADMIN_CLIENTE", empresa=empresa_a)
+
+    respuesta = cliente.get("/visitas", headers=auth(admin_cliente))
+
+    assert respuesta.status_code == 200, respuesta.text
+    ids = {visita["id_visita"] for visita in respuesta.json()}
+    assert ids == {visita_a.id_visita}
+    assert visita_b.id_visita not in ids
+
+
+def test_admin_cliente_sin_empresa_lista_vacia(cliente, fabrica, auth):
+    """Un ADMIN_CLIENTE sin empresa resuelta recibe 200 con lista vacía."""
+    comercial = fabrica.usuario("COMERCIAL_MANSILLAS")
+    tecnico = fabrica.usuario("TECNICO")
+    empresa = fabrica.empresa()
+    sede = fabrica.sede(empresa)
+    fabrica.visita(empresa, sede, comercial, tecnico)
+
+    admin_sin_empresa = fabrica.usuario("ADMIN_CLIENTE")  # empresa=None
+
+    respuesta = cliente.get("/visitas", headers=auth(admin_sin_empresa))
+
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json() == []
+
+
 def test_comercial_ve_todas_las_visitas(cliente, fabrica, auth):
     empresa = fabrica.empresa()
     sede = fabrica.sede(empresa)

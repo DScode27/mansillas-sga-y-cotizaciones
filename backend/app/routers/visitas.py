@@ -162,6 +162,12 @@ def listar_visitas(
         stmt = select(Visita)
     elif user.rol == "TECNICO":
         stmt = select(Visita).where(Visita.id_tecnico == user.id)
+    elif user.rol == "ADMIN_CLIENTE":
+        # Portal cliente (R4): solo las visitas de su propia empresa. Sin
+        # empresa resuelta, lista vacía (igual que portal_cliente.py).
+        if user.empresa_id is None:
+            return []
+        stmt = select(Visita).where(Visita.id_empresa == user.empresa_id)
     else:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol no autorizado")
     return list(db.scalars(stmt.order_by(Visita.id_visita)).all())
