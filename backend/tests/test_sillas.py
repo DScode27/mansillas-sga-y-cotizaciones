@@ -241,15 +241,51 @@ def test_listar_sillas_comercial_cualquier_visita(cliente, fabrica, auth):
     assert len(respuesta.json()) == 1
 
 
-def test_listar_sillas_rol_no_autorizado(cliente, fabrica, auth):
-    """HU-02 Req 2.7: a role other than tecnico/comercial is rejected."""
+def test_listar_sillas_admin_cliente_misma_empresa(cliente, fabrica, auth):
+    """El ADMIN_CLIENTE ve las sillas de una visita de su propia empresa (R4)."""
     datos = fabrica.escenario()
+    assert _registrar(
+        cliente, auth, datos["tecnico"], datos["visita"], datos["empleado"]
+    ).status_code == 201
     admin_cliente = fabrica.usuario("ADMIN_CLIENTE", empresa=datos["empresa"])
 
     respuesta = cliente.get(
         "/sillas",
         params={"id_visita": datos["visita"].id_visita},
         headers=auth(admin_cliente),
+    )
+
+    assert respuesta.status_code == 200, respuesta.text
+    cuerpo = respuesta.json()
+    assert len(cuerpo) == 1
+    assert cuerpo[0]["id_visita"] == datos["visita"].id_visita
+
+
+def test_listar_sillas_admin_cliente_otra_empresa(cliente, fabrica, auth):
+    """El ADMIN_CLIENTE NO puede ver sillas de una visita de otra empresa (R4)."""
+    datos = fabrica.escenario()
+    otra_empresa = fabrica.empresa()
+    admin_ajeno = fabrica.usuario("ADMIN_CLIENTE", empresa=otra_empresa)
+
+    respuesta = cliente.get(
+        "/sillas",
+        params={"id_visita": datos["visita"].id_visita},
+        headers=auth(admin_ajeno),
+    )
+
+    assert respuesta.status_code == 403
+
+
+def test_listar_sillas_rol_no_autorizado(cliente, fabrica, auth):
+    """HU-02 Req 2.7: a role other than tecnico/comercial/admin-cliente is
+    rejected. EMPLEADO_CLIENTE has no read access to the chair listing."""
+    datos = fabrica.escenario()
+    empleado_cliente = fabrica.usuario("EMPLEADO_CLIENTE", empresa=datos["empresa"])
+
+    respuesta = cliente.get(
+        "/sillas",
+        params={"id_visita": datos["visita"].id_visita},
+        headers=auth(empleado_cliente),
     )
 
     assert respuesta.status_code == 403

@@ -197,9 +197,14 @@ def test_admin_cliente_ve_solo_las_visitas_de_su_empresa(cliente, fabrica, auth)
     respuesta = cliente.get("/visitas", headers=auth(admin_cliente))
 
     assert respuesta.status_code == 200, respuesta.text
-    ids = {visita["id_visita"] for visita in respuesta.json()}
+    cuerpo = respuesta.json()
+    ids = {visita["id_visita"] for visita in cuerpo}
     assert ids == {visita_a.id_visita}
     assert visita_b.id_visita not in ids
+    # Los nombres de sede y técnico vienen resueltos.
+    fila = next(v for v in cuerpo if v["id_visita"] == visita_a.id_visita)
+    assert fila["sede_nombre"] == sede_a.nombre
+    assert fila["tecnico_nombre"] == tecnico.nombre
 
 
 def test_admin_cliente_sin_empresa_lista_vacia(cliente, fabrica, auth):
@@ -231,7 +236,26 @@ def test_comercial_ve_todas_las_visitas(cliente, fabrica, auth):
 
     respuesta = cliente.get("/visitas", headers=auth(comercial))
     assert respuesta.status_code == 200
-    assert {visita["id_visita"] for visita in respuesta.json()} == creadas
+    cuerpo = respuesta.json()
+    assert {visita["id_visita"] for visita in cuerpo} == creadas
+    # El nombre de la sede viene resuelto para todas (comparten sede).
+    assert all(v["sede_nombre"] == sede.nombre for v in cuerpo)
+    nombres_tecnico = {t.id_usuario: t.nombre for t in tecnicos}
+    assert all(
+        v["tecnico_nombre"] == nombres_tecnico[v["id_tecnico"]] for v in cuerpo
+    )
+
+
+def test_listar_visitas_resuelve_nombre_para_tecnico(cliente, fabrica, auth):
+    """El TECNICO también recibe sede_nombre y tecnico_nombre resueltos."""
+    datos = fabrica.escenario()
+    respuesta = cliente.get("/visitas", headers=auth(datos["tecnico"]))
+
+    assert respuesta.status_code == 200, respuesta.text
+    cuerpo = respuesta.json()
+    fila = next(v for v in cuerpo if v["id_visita"] == datos["visita"].id_visita)
+    assert fila["sede_nombre"] == datos["sede"].nombre
+    assert fila["tecnico_nombre"] == datos["tecnico"].nombre
 
 
 def test_finalizar_visita_tecnico_dueno(cliente, fabrica, auth):

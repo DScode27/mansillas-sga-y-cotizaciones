@@ -51,6 +51,26 @@ function conDerivados(silla) {
   return { ...silla, sugerir_cambio: calcularSugerirCambio(silla.componentes) }
 }
 
+/* Lista ligera de las sillas de una visita (GET /sillas?id_visita).
+ *
+ * A diferencia de `listSillas`, NO enriquece cada silla con su checklist de
+ * componentes ni sus fotos (evita el N+1): devuelve solo los campos base de
+ * `SillaOut`. Pensada para la vista de visitas, que solo muestra código QR,
+ * cargo y estado por silla. En mock devuelve los campos base del store. */
+export async function listSillasBasico(idVisita) {
+  if (USE_MOCK.sillas) {
+    const filtradas =
+      idVisita == null || idVisita === ''
+        ? sillasMock
+        : sillasMock.filter((s) => s.id_visita === Number(idVisita))
+    return filtradas.map((s) => ({ ...s }))
+  }
+  const { data } = await apiClient.get('/sillas', {
+    params: idVisita ? { id_visita: idVisita } : undefined,
+  })
+  return data
+}
+
 export async function listSillas(idVisita) {
   if (USE_MOCK.sillas) {
     const filtradas =

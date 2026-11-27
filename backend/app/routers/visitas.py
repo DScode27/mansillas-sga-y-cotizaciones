@@ -56,6 +56,11 @@ class VisitaOut(BaseModel):
     cantidad_estimada: int
     estado: str
     observaciones: str | None
+    # Resolved names for display. Optional so the endpoints that return a raw
+    # Visita (create/update/get/finalize) still serialize; only `listar_visitas`
+    # populates them.
+    sede_nombre: str | None = None
+    tecnico_nombre: str | None = None
 
 
 def _campos_faltantes(payload: VisitaCreate) -> list[str]:
@@ -157,7 +162,7 @@ def crear_visita(
 def listar_visitas(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[CurrentUser, Depends(get_current_user)],
-) -> list[Visita]:
+) -> list[VisitaOut]:
     if user.rol == "COMERCIAL_MANSILLAS":
         stmt = select(Visita)
     elif user.rol == "TECNICO":
@@ -170,7 +175,41 @@ def listar_visitas(
         stmt = select(Visita).where(Visita.id_empresa == user.empresa_id)
     else:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol no autorizado")
-    return list(db.scalars(stmt.order_by(Visita.id_visita)).all())
+
+    visitas = list(db.scalars(stmt.order_by(Visita.id_visita)).all())
+    if not visitas:
+        return []
+
+    # Resolve sede and técnico names in two batched lookups (no N+1).
+    sede_ids = {v.id_sede for v in visitas}
+    tecnico_ids = {v.id_tecnico for v in visitas}
+    sedes = {
+        s.id_sede: s.nombre
+        for s in db.scalars(select(Sede).where(Sede.id_sede.in_(sede_ids))).all()
+    }
+    tecnicos = {
+        u.id_usuario: u.nombre
+        for u in db.scalars(
+            select(Usuario).where(Usuario.id_usuario.in_(tecnico_ids))
+        ).all()
+    }
+
+    return [
+        VisitaOut(
+            id_visita=v.id_visita,
+            id_empresa=v.id_empresa,
+            id_sede=v.id_sede,
+            id_comercial=v.id_comercial,
+            id_tecnico=v.id_tecnico,
+            fecha_programada=v.fecha_programada,
+            cantidad_estimada=v.cantidad_estimada,
+            estado=v.estado,
+            observaciones=v.observaciones,
+            sede_nombre=sedes.get(v.id_sede),
+            tecnico_nombre=tecnicos.get(v.id_tecnico),
+        )
+        for v in visitas
+    ]
 
 
 @router.get("/{id_visita}", response_model=VisitaOut)

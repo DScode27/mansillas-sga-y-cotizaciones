@@ -252,12 +252,21 @@ def registrar_silla(
 
 
 def _autorizar_visita(user: CurrentUser, visita: Visita) -> None:
-    """Allow a commercial on any visit and a technician only on their own."""
+    """Authorize read access to a visit's chairs by role.
+
+    A commercial may see any visit; a technician only their own assigned visits;
+    an ADMIN_CLIENTE only visits of their own company (R4). Any other role, or a
+    mismatched company, is rejected.
+    """
     if user.rol == "COMERCIAL_MANSILLAS":
         return
     if user.rol == "TECNICO":
         require_tecnico_owns_visita(user, visita)
         return
+    if user.rol == "ADMIN_CLIENTE":
+        if visita.id_empresa == user.empresa_id:
+            return
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol no autorizado")
     raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol no autorizado")
 
 

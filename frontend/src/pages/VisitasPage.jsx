@@ -20,11 +20,12 @@
  * backend (R4); aquí el selector solo acota la vista. Estados de carga, error y
  * vacío en cada listado.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { listEmpresas } from '../api/empresas'
 import { listUsuarios } from '../api/usuarios'
 import { listSedes } from '../api/sedes'
 import { listVisitas, createVisita, updateVisita, deleteVisita } from '../api/visitas'
+import { listSillasBasico } from '../api/sillas'
 import { ROLES } from '../auth/roles'
 import { useAuth } from '../context/auth-context'
 
@@ -37,6 +38,21 @@ const ESTADO_LABEL = {
 
 // Estados que el comercial puede asignar desde el listado (PUT /visitas/{id}).
 const ESTADOS_VISITA = ['PROGRAMADA', 'EN_CURSO', 'FINALIZADA', 'CANCELADA']
+
+// Etiqueta legible por estado de la silla (para la fila expandible "Ver sillas").
+const ESTADO_SILLA_LABEL = {
+  REGISTRADA: 'Registrada',
+  LEVANTADA: 'Levantada',
+  MANTENIMIENTO: 'Mantenimiento',
+  DANADA: 'Dañada',
+}
+
+// Total de columnas de la tabla de visitas, para el colSpan de la fila
+// expandida: Sede, Técnico, Fecha, Cant., Estado, Observaciones, Sillas (7) y
+// Acciones solo si el usuario puede crear (comercial).
+function totalColumnas(puedeCrear) {
+  return puedeCrear ? 8 : 7
+}
 
 function formInicial() {
   return {
@@ -88,6 +104,40 @@ export default function VisitasPage() {
   // deshabilitar sus controles. Y mensajes de resultado del listado.
   const [accionEnCurso, setAccionEnCurso] = useState(null)
   const [errorAccion, setErrorAccion] = useState('')
+
+  // Sillas por visita (fila expandible "Ver sillas"). `sillasExpandida` es el
+  // id_visita abierto (o null). `sillasPorVisita` cachea el resultado por visita
+  // para no repedir; cada entrada: { estado: 'cargando'|'ok'|'error', items }.
+  const [sillasExpandida, setSillasExpandida] = useState(null)
+  const [sillasPorVisita, setSillasPorVisita] = useState({})
+
+  // Abre/cierra la fila de sillas de una visita. La primera vez pide al backend
+  // (GET /sillas?id_visita) y cachea; las siguientes reutilizan la caché.
+  async function handleToggleSillas(idVisita) {
+    if (sillasExpandida === idVisita) {
+      setSillasExpandida(null)
+      return
+    }
+    setSillasExpandida(idVisita)
+    if (sillasPorVisita[idVisita]?.estado === 'ok') return
+
+    setSillasPorVisita((prev) => ({
+      ...prev,
+      [idVisita]: { estado: 'cargando', items: [] },
+    }))
+    try {
+      const items = await listSillasBasico(idVisita)
+      setSillasPorVisita((prev) => ({
+        ...prev,
+        [idVisita]: { estado: 'ok', items },
+      }))
+    } catch {
+      setSillasPorVisita((prev) => ({
+        ...prev,
+        [idVisita]: { estado: 'error', items: [] },
+      }))
+    }
+  }
 
   // Empresas para el selector (mock conmutable). El técnico no usa el selector
   // de empresa (RF-01), así que ni se cargan.
@@ -534,16 +584,24 @@ export default function VisitasPage() {
                       <th>Cant. estimada</th>
                       <th>Estado</th>
                       <th>Observaciones</th>
+                      <th>Sillas</th>
                       {puedeCrear && <th>Acciones</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {visitas.map((v) => {
                       const ocupada = accionEnCurso === v.id_visita
+                      const abierta = sillasExpandida === v.id_visita
+                      const sillasEstado = sillasPorVisita[v.id_visita]
                       return (
-                        <tr key={v.id_visita}>
-                          <td>{v.id_sede}</td>
-                          <td>{tecnicosPorId.get(v.id_tecnico) ?? v.id_tecnico}</td>
+                        <Fragment key={v.id_visita}>
+                        <tr>
+                          <td>{v.sede_nombre ?? v.id_sede}</td>
+                          <td>
+                            {v.tecnico_nombre ??
+                              tecnicosPorId.get(v.id_tecnico) ??
+                              v.id_tecnico}
+                          </td>
                           <td>
                             {v.fecha_programada
                               ? new Date(v.fecha_programada).toLocaleString()
@@ -572,6 +630,16 @@ export default function VisitasPage() {
                             )}
                           </td>
                           <td>{v.observaciones ?? '—'}</td>
+                          <td>
+                            <button
+                              className="btn btn--ghost"
+                              type="button"
+                              aria-expanded={abierta}
+                              onClick={() => handleToggleSillas(v.id_visita)}
+                            >
+                              {abierta ? 'Ocultar sillas' : 'Ver sillas'}
+                            </button>
+                          </td>
                           {puedeCrear && (
                             <td>
                               <button
@@ -585,6 +653,54 @@ export default function VisitasPage() {
                             </td>
                           )}
                         </tr>
+                        {abierta && (
+                          <tr>
+                            <td colSpan={totalColumnas(puedeCrear)}>
+                              {!sillasEstado || sillasEstado.estado === 'cargando' ? (
+                                <p className="state-text">Cargando sillas…</p>
+                              ) : sillasEstado.estado === 'error' ? (
+                                <div className="state-error" role="alert">
+                                  <p>No se pudieron cargar las sillas.</p>
+                                  <button
+                                    className="btn btn--ghost"
+                                    type="button"
+                                    onClick={() => handleToggleSillas(v.id_visita)}
+                                  >
+                                    Reintentar
+                                  </button>
+                                </div>
+                              ) : sillasEstado.items.length === 0 ? (
+                                <p className="state-text">
+                                  Esta visita no tiene sillas registradas.
+                                </p>
+                              ) : (
+                                <table className="data-table">
+                                  <thead>
+                                    <tr>
+                                      <th>Código QR</th>
+                                      <th>Cargo</th>
+                                      <th>Sede</th>
+                                      <th>Estado</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {sillasEstado.items.map((s) => (
+                                      <tr key={s.id_silla}>
+                                        <td>{s.codigo_qr}</td>
+                                        <td>{s.cargo}</td>
+                                        <td>{v.sede_nombre ?? v.id_sede}</td>
+                                        <td>
+                                          {ESTADO_SILLA_LABEL[s.estado] ?? s.estado}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       )
                     })}
                   </tbody>
