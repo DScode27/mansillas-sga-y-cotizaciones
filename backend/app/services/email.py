@@ -101,10 +101,15 @@ def _enviar_por_resend(destinatario: str, asunto: str, cuerpo: str) -> None:
         )
         respuesta.raise_for_status()
     except httpx.HTTPStatusError as error:
+        # Resend returns a short, non-sensitive reason in the body (e.g. a
+        # restricted sender/recipient in test mode). Log it to aid diagnosis;
+        # it contains no API key or message body.
+        detalle = error.response.text[:300]
         logger.error(
-            "Fallo al enviar correo (Resend) a %s: HTTP %s",
+            "Fallo al enviar correo (Resend) a %s: HTTP %s %s",
             destinatario,
             error.response.status_code,
+            detalle,
         )
         raise EmailEnvioError("No fue posible enviar el correo") from error
     except httpx.HTTPError as error:
